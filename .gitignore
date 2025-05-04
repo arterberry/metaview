@@ -157,3 +157,4 @@ sessionStorage.json
 # Environment variables (if storing API keys, AWS credentials, etc.)
 .env
 .env.local
+node_modules/

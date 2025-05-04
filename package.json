@@ -1,0 +1,12 @@
+{
+  "name": "metaview",
+  "version": "1.0.0",
+  "description": "MetaView is a detailed HLS player extension for Chrome",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

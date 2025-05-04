@@ -1,0 +1,19 @@
+
+[
+    {
+		"id": 1,
+		"priority": 1,
+		"action": {
+			"type": "redirect",
+			"redirect": {
+			"regexSubstitution": "chrome-extension://__MSG_@@extension_id__/player.html?src=\\1"
+			}
+      	},
+		"condition": {
+			"regexFilter": "^(.*\\.m3u8(?:\\?.*)?)$",
+			"resourceTypes": [
+			"main_frame"
+			]
+      	}
+    }
+]

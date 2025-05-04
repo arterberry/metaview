@@ -1,0 +1,52 @@
+/* css/cache_manager.css */
+
+.cache-metrics-section, .cache-ttl-section {
+    display: block;
+    width: 100%;
+    color: #e0e0e0;
+ }
+
+ .cache-ttl-section {
+    margin-top: 10px;
+    margin-bottom: 10px;
+}
+
+.cache-metrics-label {
+    font-weight: bold;
+    margin-bottom: 5px;
+    font-size: 12px;
+    margin-top: 25px;
+    margin-bottom: 15px;
+}
+
+.cache-graph-container {
+    border: 1px solid #666; /* Darker border */
+    background-color: #4E4E4E; /* Dark background for graph area */
+    padding: 5px;
+    position: relative; /* Needed for absolute positioned labels */
+    min-height: 80px; /* Ensure minimum height */
+}
+
+#cacheHitMissGraph {
+    display: block;
+    width: 100%;
+    height: 125px; 
+}
+.cache-stats {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: #cccccc; /* Lighter text for stats */
+    margin-top: 5px;
+    padding: 0 5px; /* Add some padding */
+}
+
+/* Graph Labels (Positioned with JS now for better alignment) */
+.graph-label {
+    position: absolute;
+    font-size: 10px;
+    font-family: Arial, sans-serif;
+    color: #aaaaaa; /* Label color */
+    pointer-events: none; /* Don't interfere with interactions */
+}
+

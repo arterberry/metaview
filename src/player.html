@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>VIDINFRA HLS MetaPlayer</title>
+    <link rel="stylesheet" href="css/player.css">
+    <link rel="stylesheet" href="css/side_panel.css">
+    <link rel="stylesheet" href="css/resolution_manager.css">
+    <link rel="stylesheet" href="css/cache_manager.css">
+    <link rel="stylesheet" href="css/scte_manager.css">
+    <link rel="stylesheet" href="css/config.css">
+    <link rel="stylesheet" href="css/qoe.css">
+</head>
+
+<body>
+    <div class="main-container">
+        <div class="video-container">
+            <video id="hlsVideoPlayer" controls autoplay playsinline></video>
+
+            <!-- Side panel button with eye icon -->
+            <button id="side-panel-button" title="Open HLS Info Panel">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512" fill="white">
+                    <path
+                        d="M288 32c-80.8 0-145.5 36.8-192.6 80.6C48.6 156 17.3 208 2.5 243.7c-3.3 7.9-3.3 16.7 0 24.6C17.3 304 48.6 356 95.4 399.4C142.5 443.2 207.2 480 288 480s145.5-36.8 192.6-80.6c46.8-43.5 78.1-95.4 93-131.1c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C433.5 68.8 368.8 32 288 32zM144 256a144 144 0 1 1 288 0 144 144 0 1 1 -288 0zm144-64c0 35.3-28.7 64-64 64c-7.1 0-13.9-1.2-20.3-3.3c-5.5-1.8-11.9 1.6-11.7 7.4c.3 6.9 1.3 13.8 3.2 20.7c13.7 51.2 66.4 81.6 117.6 67.9s81.6-66.4 67.9-117.6c-11.1-41.5-47.8-69.4-88.6-71.1c-5.8-.2-9.2 6.1-7.4 11.7c2.1 6.4 3.3 13.2 3.3 20.3z" />
+                </svg>
+            </button>
+        </div>
+
+        <!-- Updated HTML for side_panel.html -->
+        <div class="metadata-header">
+            <span></span> <!-- Empty for now, will contain other data later -->
+        </div>
+
+        <!-- Resize Handle  -->
+        <div id="metadataResizeHandle"></div>
+
+        <div id="metadataContainer">
+            <div id="metadataPanel">
+                <div id="metadataList"></div>
+            </div>
+
+            <!-- Internal Resize Handle  -->
+            <div id="resizeHandleVertical"></div>
+
+            <div id="responsePanelUpdate">
+                <div class="metadata_tab-buttonsUpdate">
+                    <button class="metadata_tab-buttonUpdate active" data-tab="headers">Response Headers</button>
+                    <button class="metadata_tab-buttonUpdate" data-tab="body">Response Body</button>
+                </div>
+                <div class="metadata_tab-contentUpdate">
+                    <div id="headers-tabUpdate" class="metadata_tab-paneUpdate active">
+                        <pre id="headerContent">Select a segment to view headers</pre>
+                    </div>
+                    <div id="body-tabUpdate" class="metadata_tab-paneBodyUpdate">
+                        <pre id="bodyContent">Select a segment to view response body</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="status-bar" id="statusBar"></div>
+    </div>
+
+    <!-- Fixed right-side info panel -->
+    <div id="hlsInfoPanel" class="info-panel hidden">
+        <div class="info-panel-header">
+            <h4>VIDINFRA HLS MetaPlayer</h4>
+            <button id="closeButton">
+                <!-- <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512">
+                    <path
+                        d="M342.6 150.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L192 210.7 86.6 105.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L146.7 256 41.4 361.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L192 301.3 297.4 406.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L237.3 256 342.6 150.6z" />
+                </svg> -->
+            </button>
+        </div>
+        <div class="info-panel-content">
+            <!-- BEGIN: Extended Metrics UI -->
+            <div class="tab-container">
+                <div class="tab-nav">
+                    <button class="tab-button active" data-tab="inspect">Inspect</button>
+                    <button class="tab-button" data-tab="qoe">Metrics</button>
+                    <button class="tab-button" data-tab="ai">AI</button>
+                </div>
+
+                <div class="tab-content">
+                    <!-- Inspect Tab -->
+                    <div class="tab-pane active" id="inspect-tab">
+                        <div class="resolutions-section">
+                            <div class="resolutions-label">Available Resolutions (ABR):</div>
+                            <div id="resolutionList"></div>
+                        </div>
+
+                        <div class="cache-metrics-section">
+                            <div class="cache-metrics-label">Cache Hit Ratio Performance:</div>
+                            <div class="cache-graph-container" id="cacheGraphContainer"> <!-- Add ID -->
+                                <canvas id="cacheHitMissGraph" width="360" height="125"></canvas>
+                                <!-- Labels will be added dynamically or via CSS -->
+                                <div class="cache-stats">
+                                    <span id="hitRatio">Hit Ratio: --%</span> <!-- Default text -->
+                                    <span id="segmentCount">Segments: 0</span> <!-- Default text -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="cache-ttl-section">
+                            <div class="cache-metrics-label">Cache TTL:</div>
+                            <div id="cacheTtlDisplay" class="cache-ttl-container">No TTL information available</div>
+                        </div>
+                    </div>
+                    
+                    <!-- QoE Tab -->
+                    <div class="tab-pane" id="qoe-tab">
+                        <div class="qoe-score-section" style="display: none;">
+                            <div class="qoe-score-label">DELETE CSS</div>
+                            <div id="qoeScoreDisplay" class="qoe-score-container">
+                                <div id="qoeScoreValue" class="qoe-score-value">N/A</div>
+                                <div id="qoeScoreMeter" class="qoe-score-meter">
+                                    <div id="qoeScoreFill" class="qoe-score-fill" style="width: 0%;"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="qoe-metrics-section">
+                            <div class="qoe-metrics-label">Playback Metrics:</div>
+                            <div class="qoe-metrics-container">
+                                <div class="qoe-metric-row">
+                                    <span class="qoe-metric-name">CDN Provider:</span>
+                                    <span id="cdnProvider" class="qoe-metric-value">Detecting...</span>
+                                </div>
+                                <div class="qoe-metric-row">
+                                    <span class="qoe-metric-name">Startup Time:</span>
+                                    <span id="startupTime" class="qoe-metric-value">N/A</span>
+                                </div>
+                                <div class="qoe-metric-row">
+                                    <span class="qoe-metric-name">Time to First Frame:</span>
+                                    <span id="timeToFirstFrame" class="qoe-metric-value">N/A</span>
+                                </div>
+                                <div class="qoe-metric-row">
+                                    <span class="qoe-metric-name">Quality Switches:</span>
+                                    <span id="qualitySwitches" class="qoe-metric-value">0</span>
+                                </div>
+                                <div class="qoe-metric-row">
+                                    <span class="qoe-metric-name">Rebuffering Events:</span>
+                                    <span id="rebufferingEvents" class="qoe-metric-value">0</span>
+                                </div>
+                                <div class="qoe-metric-row">
+                                    <span class="qoe-metric-name">Average Rebuffer Duration:</span>
+                                    <span id="avgRebufferDuration" class="qoe-metric-value">N/A</span>
+                                </div>
+                                <div class="qoe-metric-row">
+                                    <span class="qoe-metric-name">Current Bitrate:</span>
+                                    <span id="currentBitrate" class="qoe-metric-value">N/A</span>
+                                </div>
+                                <div class="qoe-metric-row">
+                                    <span class="qoe-metric-name">Current Resolution:</span>
+                                    <span id="currentResolution" class="qoe-metric-value">N/A</span>
+                                </div>
+                                <div class="qoe-metric-row">
+                                    <span class="qoe-metric-name">Playback Rate:</span>
+                                    <span id="playbackRate" class="qoe-metric-value">1x</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="qoe-details-section">
+                            
+                            <div class="qoe-details-tabs">
+                                <button class="qoe-details-tab active" data-qoe-tab="audio-tracks">Audio</button>
+                                <button class="qoe-details-tab" data-qoe-tab="subtitles">Subtitles</button>
+                                <button class="qoe-details-tab" data-qoe-tab="connection">Connection</button>
+                                <button class="qoe-details-tab" data-qoe-tab="qos">QoS</button>
+                            </div>
+
+                            <div class="qoe-details-content">
+                                <!-- Audio Tracks Panel -->
+                                <div id="audio-tracks-panel" class="qoe-details-panel active">
+                                    <div id="audioTracksContainer">No audio track information available</div>
+                                </div>
+
+                                <!-- Subtitles Panel -->
+                                <div id="subtitles-panel" class="qoe-details-panel">
+                                    <div id="subtitlesContainer">No subtitle information available</div>
+                                </div>
+
+                                <!-- Connection Panel -->
+                                <div id="connection-panel" class="qoe-details-panel">
+                                    <div id="connectionContainer">
+                                        <div class="qoe-metric-row">
+                                            <span class="qoe-metric-name">TCP Throughput:</span>
+                                            <span id="tcpThroughput" class="qoe-metric-value">N/A</span>
+                                        </div>
+                                        <div class="qoe-metric-row">
+                                            <span class="qoe-metric-name">Download Speed:</span>
+                                            <span id="downloadSpeed" class="qoe-metric-value">N/A</span>
+                                        </div>
+                                        <div class="qoe-metric-row">
+                                            <span class="qoe-metric-name">Latency:</span>
+                                            <span id="latency" class="qoe-metric-value">N/A</span>
+                                        </div>
+                                        <div class="qoe-metric-row">
+                                            <span class="qoe-metric-name">Connection Type:</span>
+                                            <span id="connectionType" class="qoe-metric-value">Unknown</span>
+                                        </div>
+                                    </div>
+                                </div>
+        
+                                <!--  QoS Panel -->
+                                <div id="qos-panel" class="qoe-details-panel">
+                                    <div id="qosContainer">
+                                        <div class="qoe-metric-row">
+                                            <span class="qoe-metric-name">Avg. Segment Throughput:</span>
+                                            <span id="availableBandwidth" class="qoe-metric-value">N/A</span>
+                                        </div>
+                                        <div class="qoe-metric-row">
+                                            <span class="qoe-metric-name">Avg. Segment Download Time:</span>
+                                            <span id="avgSegmentDownloadTime" class="qoe-metric-value">N/A</span>
+                                        </div>
+                                        <div class="qoe-metric-row">
+                                            <span class="qoe-metric-name">Segment Success Rate:</span>
+                                            <span id="segmentSuccessRate" class="qoe-metric-value">N/A</span>
+                                        </div>
+                                            <div class="qoe-metric-row">
+                                            <span class="qoe-metric-name">Avg. Playlist Latency:</span>
+                                            <span id="serverResponseTime" class="qoe-metric-value">N/A</span>
+                                        </div>                                        
+                                    </div>
+                                </div>                                                           
+                            </div>
+                        </div>
+
+                        <div class="qoe-history-section">
+                            <div class="qoe-history-label">Playback Events:</div>
+                            <div id="qoeEventHistory" class="qoe-history-container">
+                                <div class="qoe-empty-history">No events recorded yet</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- AI Tab -->
+                    <div class="tab-pane" id="ai-tab">
+                        <!-- AI analysis content goes here -->
+                    </div>
+                </div>
+            </div>
+            <!-- END: Extended Metrics UI -->
+        </div>
+    </div>
+    <!-- Load Scripts -->
+    <script defer src="js/lib/hls.min.js"></script>
+    <script defer src="js/core/hls_parser.js"></script>
+    <script defer src="js/ui/player_ui.js"></script>
+    <script defer src="js/ui/scte_manager.js"></script>
+    <script defer src="js/ui/cache_manager.js"></script>
+    <script defer src="js/ui/resolution_manager.js"></script>
+    <script defer src="js/ui/segment_tags.js"></script>
+    <script defer src="js/ui/manifest_ui.js"></script>
+    <script defer src="js/ui/config_ui.js"></script>
+    <script defer src="js/ui/metrics_ui.js"></script>
+    <script defer src="js/core/player_loader.js"></script>
+
+</body>
+
+</html>

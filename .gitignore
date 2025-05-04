@@ -134,3 +134,26 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# Build and output files
+dist/
+build/
+*.crx
+*.pem
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Chrome extension local storage and cache
+*.log
+.cache/
+localStorage.json
+sessionStorage.json
+
+# VSCode settings (optional)
+.vscode/
+
+# Environment variables (if storing API keys, AWS credentials, etc.)
+.env
+.env.local

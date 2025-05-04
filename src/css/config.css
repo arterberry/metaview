@@ -1,0 +1,76 @@
+/* css/config.css */
+
+.config-section {
+    margin-top: 15px;
+    display: block;
+    width: 100%;
+}
+
+.config-section label {
+    font-weight: bold;
+    font-size: 12px;
+    margin-bottom: 5px;
+}
+
+.config-section select {
+    width: 100%;
+    padding: 6px 8px;
+    margin-bottom: 10px;
+    background-color: #2c2c2c;
+    border: 1px solid #555;
+    border-radius: 3px;
+    color: #fff;
+}
+
+.config-section input[type="password"] {
+    width: 95%;
+    padding: 6px 8px;
+    margin-bottom: 10px;
+    background-color: #2c2c2c;
+    border: 1px solid #555;
+    border-radius: 3px;
+    color: #fff;
+}
+
+.config-section select:focus,
+.config-section input:focus {
+    outline: none;
+    border-color: #999;
+}
+
+.config-actions {
+    margin-bottom: 10px;
+}
+
+.save-btn {
+    background-color: #bff4bf;
+    color: #323232;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.save-btn:hover {
+    opacity: 0.9;
+}
+
+.clear-btn {
+    background-color: #ccc;
+    color: #323232;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.clear-btn:hover {
+    background-color: #bbb;
+}
+
+.config-divider {
+    border: none;
+    border-top: 1px solid #eee; 
+    margin-top: 25px;
+    margin-bottom: 25px;
+}

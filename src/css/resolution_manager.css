@@ -1,0 +1,81 @@
+/* css/resolution_manager.css */
+
+#resolutionList {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    background-color: #4E4E4E;
+    /* Match tab pane background */
+    border: none;
+    /* Remove border from side_panel.css */
+    color: #ffffff;
+    /* Default text color for items inside */
+}
+
+.resolution-item,
+.resolution-item-auto {
+    padding: 5px 8px;
+    border-bottom: 1px solid #666666;
+    /* Darker border for dark bg */
+    font-size: 11px;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
+    /* Added color transition */
+    line-height: 1.4;
+    color: #ffffff;
+    /* Explicit white text */
+}
+
+.resolution-item:last-child,
+.resolution-item-auto:last-child {
+    /* Apply to auto as well if last */
+    border-bottom: none;
+}
+
+.resolution-item:not(.disabled):hover,
+/* Don't apply hover if disabled */
+.resolution-item-auto:hover {
+    background-color: #ffffff;
+    /* White background on hover */
+    color: #000000;
+    /* Black text on hover */
+}
+
+.resolution-item:not(.disabled):hover .resolution-bw,
+.resolution-item-auto:hover .resolution-bw {
+    color: #222222;
+    /* Darker text for bandwidth on hover */
+}
+
+.resolution-item.selected,
+.resolution-item-auto.selected {
+    background-color: #bff4bf;
+    /* Light green background for selected */
+    color: #000000;
+    /* Black text for contrast */
+    font-weight: bold;
+}
+
+.resolution-item.selected .resolution-bw,
+.resolution-item-auto.selected .resolution-bw {
+    color: #333333;
+    /* Dark text for bandwidth when selected */
+}
+
+
+.resolution-bw {
+    color: #cccccc;
+    /* Dimmer white for bandwidth */
+    margin-left: 5px;
+}
+
+/* Keep disabled styling separate */
+.resolution-item.disabled {
+    cursor: default;
+    opacity: 0.7;
+}
+
+.resolution-item-auto {
+    display: none !important;
+}
+

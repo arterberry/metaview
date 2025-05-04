@@ -1,0 +1,175 @@
+/* css/scte_manager.css */
+
+/* SCTE-35 Detection Section */
+.scte-section {
+    margin-top: 25px;
+    display: block;
+    width: 100%;
+}
+
+.scte-label {
+    font-weight: bold;
+    margin-bottom: 5px;
+    font-size: 12px;
+    color: #e0e0e0;
+}
+
+.scte-container {    
+    background-color: #4E4E4E;
+    border-color: #4E4E4E;
+    padding: 10px;
+    font-size: 11px;
+    color: #ffffff;
+    position: relative;
+}
+
+.scte-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.scte-status {
+    font-style: italic;
+    color: #cccccc;
+}
+
+.scte-status.scte-active {
+    color: #4CAF50;
+    font-weight: bold;
+    font-style: normal;
+}
+
+.scte-ad-time {
+    font-family: monospace;
+    color: #cccccc;
+}
+
+.scte-ad-time.active {
+    color: #4CAF50;
+    font-weight: bold;
+}
+
+.scte-list {
+    max-height: 150px;
+    overflow-y: auto;
+}
+
+.scte-empty {
+    color: #999;
+    font-style: italic;
+    text-align: center;
+    padding: 10px 0;
+}
+
+.scte-detection {
+    padding: 6px 8px;
+    margin-bottom: 6px;
+    border-radius: 3px;
+    background-color: #3d3d3d;
+    border-left: 3px solid #4CAF50; 
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.scte-detection:hover {
+    background-color: #555;
+}
+
+.scte-detection:last-child {
+    margin-bottom: 0;
+}
+
+.scte-detection-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 3px;
+}
+
+.scte-detection-type {
+    font-weight: bold;
+}
+
+.scte-detection-time {
+    color: #bbb;
+    font-size: 10px;
+}
+
+.scte-detection-info {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+}
+
+.scte-detection-creative {
+    font-family: monospace;
+    background-color: rgba(0, 0, 0, 0.2);
+    padding: 1px 4px;
+    border-radius: 2px;
+    max-width: 70%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.scte-detection-duration {
+    background-color: rgba(0, 0, 0, 0.2);
+    padding: 1px 4px;
+    border-radius: 2px;
+    font-family: monospace;
+}
+
+/* Added detailed information styling */
+.scte-detection-details {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px dotted #666;
+    font-size: 10px;
+    display: none; /* Hidden by default */
+}
+
+.scte-detection.expanded .scte-detection-details {
+    display: block; /* Show when expanded */
+}
+
+.scte-detail-item {
+    margin-bottom: 4px;
+}
+
+.scte-detail-label {
+    font-weight: bold;
+    color: #aaa;
+    display: inline-block;
+    width: 80px;
+}
+
+.scte-detail-value {
+    font-family: monospace;
+    word-break: break-all;
+}
+
+.scte-detail-params {
+    margin-top: 2px;
+    margin-left: 10px;
+}
+
+.scte-param {
+    margin-bottom: 2px;
+}
+
+.scte-param-key {
+    color: #aaa;
+    font-weight: bold;
+    margin-right: 4px;
+}
+
+.scte-param-value {
+    font-family: monospace;
+}
+
+.scte-full-path {
+    color: #ccc;
+    margin-top: 4px;
+    font-size: 0.8em;
+}
+  

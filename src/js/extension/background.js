@@ -15,7 +15,7 @@ chrome.webNavigation.onBeforeNavigate.addListener(
   
         chrome.tabs.update(details.tabId, { url: targetUrl }, () => {
           if (chrome.runtime.lastError) {
-            console.error(`Tab update error: ${chrome.runtime.lastError.message}`);
+            // console.error(`Tab update error: ${chrome.runtime.lastError.message}`);
           }
         });
       }
@@ -26,7 +26,7 @@ chrome.webNavigation.onBeforeNavigate.addListener(
   );
   
   chrome.runtime.onInstalled.addListener(() => {
-    console.log("VIDINFRA HLS MetaPlayer installed.");
+    // console.log("VIDINFRA HLS MetaPlayer installed.");
   });
   
 
@@ -34,7 +34,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === "getPlayerUrl") {
         const encodedUrl = message.hlsUrl;
         
-        console.log('[background] Received HLS URL:', encodedUrl);
+        // console.log('[background] Received HLS URL:', encodedUrl);
         
         // Don't try to decode the URL at all
         getPlayerHtml().then(playerHtml => {

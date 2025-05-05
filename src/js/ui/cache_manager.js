@@ -38,11 +38,11 @@ console.log('[cache_manager] Initializing...');
 
         // Ensure all necessary elements are found
         if (!canvas || !hitRatioEl || !segmentCountEl || !graphContainerEl || !cacheTtlDisplayEl) {
-            console.error('[cache_manager] Required DOM elements not found (canvas, hitRatio, segmentCount, cacheGraphContainer, or cacheTtlDisplay).');
+            // console.error('[cache_manager] Required DOM elements not found (canvas, hitRatio, segmentCount, cacheGraphContainer, or cacheTtlDisplay).');
             return;
         }
         if (!canvas.getContext) {
-             console.error('[cache_manager] Canvas not supported.');
+             // console.error('[cache_manager] Canvas not supported.');
              return;
         }
         ctx = canvas.getContext('2d');
@@ -59,12 +59,12 @@ console.log('[cache_manager] Initializing...');
         document.addEventListener('ttlInfoDetected', handleTtlInfoDetected); // <--- Listener for TTL
         document.addEventListener('newStreamLoading', resetState); // <-- Listener for reset
 
-        console.log('[cache_manager] Initialized and listening for cache, TTL, and reset events.');
+        // console.log('[cache_manager] Initialized and listening for cache, TTL, and reset events.');
     }
 
      // --- State Reset ---
      function resetState() {
-        console.log('[cache_manager] Resetting cache and TTL state.');
+        // console.log('[cache_manager] Resetting cache and TTL state.');
         // Reset cache data
         cacheData.hits = 0;
         cacheData.misses = 0;
@@ -161,7 +161,7 @@ console.log('[cache_manager] Initializing...');
             // Depends on formatTTLDisplay being defined below
             cacheTtlDisplayEl.innerHTML = formatTTLDisplay(latestTTLInfo);
         } else {
-            console.warn("[cache_manager] Attempted to update TTL display, but element not found.");
+            // console.warn("[cache_manager] Attempted to update TTL display, but element not found.");
         }
     }
     // ---> END FUNCTION ADDED <---

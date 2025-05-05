@@ -10,7 +10,7 @@ let startX = 0, startWidth = 0;
 
 
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('DOM loaded - initializing UI components');
+    // console.log('DOM loaded - initializing UI components');
 
     // === Element References ===
     const refs = {
@@ -35,25 +35,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initialize SCTE Dispatcher if available
     if (window.SCTEDispatcher) {
-        console.log('Initializing SCTE Dispatcher');
+        // console.log('Initializing SCTE Dispatcher');
         window.SCTEDispatcher.init();
     }
 
     // === Final Validation ===
     setTimeout(() => enforcePointerEvents(refs), 500);
-    console.log('Player UI initialization complete');
+    // console.log('Player UI initialization complete');
 });
 
 /** Logs initial element state */
 function logElementState(name, el) {
     if (!el) return console.warn(`Element '${name}' not found`);
     const style = window.getComputedStyle(el);
-    console.log(`${name}:`, {
-        width: el.offsetWidth,
-        height: el.offsetHeight,
-        display: style.display,
-        position: style.position
-    });
+    // console.log(`${name}:`, {
+    //     width: el.offsetWidth,
+    //     height: el.offsetHeight,
+    //     display: style.display,
+    //     position: style.position
+    // });
 }
 
 /** Sets default flexbox styles for core elements */
@@ -155,11 +155,11 @@ function setupSidePanelToggle({ sidePanelButton, hlsInfoPanel, closeButton }) {
 function enforcePointerEvents({ metadataResizeHandle, resizeHandleVertical }) {
     if (window.getComputedStyle(metadataResizeHandle).pointerEvents === 'none') {
         metadataResizeHandle.style.pointerEvents = 'auto';
-        console.log('Enabled pointer-events on vertical resize');
+        // console.log('Enabled pointer-events on vertical resize');
     }
     if (window.getComputedStyle(resizeHandleVertical).pointerEvents === 'none') {
         resizeHandleVertical.style.pointerEvents = 'auto';
-        console.log('Enabled pointer-events on horizontal resize');
+        // console.log('Enabled pointer-events on horizontal resize');
     }
 }
 

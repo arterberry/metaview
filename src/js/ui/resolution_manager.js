@@ -17,7 +17,7 @@ console.log('[resolution_manager] Initializing...');
     function init() {
         resolutionListElement = document.getElementById('resolutionList');
         if (!resolutionListElement) {
-            console.error('[resolution_manager] Resolution list container #resolutionList not found.');
+            // console.error('[resolution_manager] Resolution list container #resolutionList not found.');
             return;
         }
         resolutionListElement.innerHTML = '<div class="resolution-item">Waiting for stream data...</div>';
@@ -33,12 +33,12 @@ console.log('[resolution_manager] Initializing...');
     // Function to check for and process the global HLS instance if available
     function checkGlobalHlsInstance() {
         if (!isHlsInstanceProcessed && window.hlsPlayerInstance) {
-             console.log('[resolution_manager] Found global HLS instance reference.');
+             // console.log('[resolution_manager] Found global HLS instance reference.');
              handleHlsLoaded({ detail: { hls: window.hlsPlayerInstance } });
         } else if (!isHlsInstanceProcessed && document.readyState === 'complete') {
              // If page is fully loaded and no instance found, maybe native playback?
              if (window.hlsPlayerInstance === null) { // Explicitly null means HLS not supported/used
-                 console.log('[resolution_manager] HLS.js instance is null (likely native playback or not supported). Controls disabled.');
+                 // console.log('[resolution_manager] HLS.js instance is null (likely native playback or not supported). Controls disabled.');
                  isHlsInstanceProcessed = true; // Mark as processed
                  isHlsLevelsPopulated = true; // Mark as checked (no levels to populate)
                  tryEnableControls(); // Allow UI update for display-only mode
@@ -49,7 +49,7 @@ console.log('[resolution_manager] Initializing...');
 
     function handleHlsPlaylistParsed(event) {
         if (event.detail.type === 'master' && event.detail.variants && event.detail.variants.length > 0) {
-            console.log('[resolution_manager] Received master playlist variants from parser:', event.detail.variants);
+            // console.log('[resolution_manager] Received master playlist variants from parser:', event.detail.variants);
             variantsData = event.detail.variants;
             isParserDataReady = true;
             displayInitialResolutions();
@@ -66,7 +66,7 @@ console.log('[resolution_manager] Initializing...');
         // ... (Keep the previous `displayInitialResolutions` function exactly as it was in the hybrid approach) ...
         if (!resolutionListElement || !isParserDataReady) return;
 
-        console.log('[resolution_manager] Displaying initial resolutions based on parser data.');
+        // console.log('[resolution_manager] Displaying initial resolutions based on parser data.');
         resolutionListElement.innerHTML = ''; // Clear previous content
 
         variantsData.forEach((variant, index) => {
@@ -105,23 +105,23 @@ console.log('[resolution_manager] Initializing...');
     function handleHlsLoaded(event) {
         // Check if we've already processed the instance via the global fallback
         if (isHlsInstanceProcessed) {
-             console.log('[resolution_manager] handleHlsLoaded called, but instance already processed. Skipping.');
+             // console.log('[resolution_manager] handleHlsLoaded called, but instance already processed. Skipping.');
              return;
         }
         if (event.detail.hls) {
-            console.log('[resolution_manager] HLS instance received via hlsLoaded event.');
+            // console.log('[resolution_manager] HLS instance received via hlsLoaded event.');
             hlsInstance = event.detail.hls; // Assign to local variable
             isHlsInstanceProcessed = true; // Mark as processed via event
 
             hlsInstance.on(Hls.Events.LEVEL_SWITCHED, handleLevelSwitched);
             hlsInstance.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
-                console.log('[resolution_manager] HLS MANIFEST_PARSED event received.');
+                // console.log('[resolution_manager] HLS MANIFEST_PARSED event received.');
                 if (hlsInstance.levels && hlsInstance.levels.length > 0) {
                     hlsLevels = hlsInstance.levels;
                     isHlsLevelsPopulated = true;
-                    console.log('[resolution_manager] HLS levels populated:', hlsLevels);
+                    // console.log('[resolution_manager] HLS levels populated:', hlsLevels);
                 } else {
-                    console.warn('[resolution_manager] MANIFEST_PARSED fired, but hls.levels seems empty.');
+                    // console.warn('[resolution_manager] MANIFEST_PARSED fired, but hls.levels seems empty.');
                     isHlsLevelsPopulated = true; // Mark as checked
                 }
                 tryEnableControls(); // Try to enable controls now
@@ -129,17 +129,17 @@ console.log('[resolution_manager] Initializing...');
 
             // Check if levels might already be populated when hlsLoaded fires
              if (hlsInstance.levels && hlsInstance.levels.length > 0) {
-                 console.log('[resolution_manager] HLS levels detected immediately on hlsLoaded.');
+                 // console.log('[resolution_manager] HLS levels detected immediately on hlsLoaded.');
                  hlsLevels = hlsInstance.levels;
                  isHlsLevelsPopulated = true;
                  tryEnableControls();
              } else {
                  // If levels aren't ready yet, wait for MANIFEST_PARSED
-                 console.log('[resolution_manager] HLS levels not immediately available, waiting for MANIFEST_PARSED.');
+                 // console.log('[resolution_manager] HLS levels not immediately available, waiting for MANIFEST_PARSED.');
              }
         } else {
              // Event fired but no HLS instance? Should not happen with current player_loader
-             console.warn('[resolution_manager] hlsLoaded event fired, but no HLS instance in detail.');
+             // console.warn('[resolution_manager] hlsLoaded event fired, but no HLS instance in detail.');
              isHlsInstanceProcessed = true; // Mark as processed to avoid infinite checks
              isHlsLevelsPopulated = true;
              tryEnableControls();
@@ -153,26 +153,26 @@ console.log('[resolution_manager] Initializing...');
             checkGlobalHlsInstance(); // Attempt to get instance if not processed yet
         }
 
-        console.log(`[resolution_manager] tryEnableControls Check: Built=${resolutionListElement.dataset.built}, InstanceProcessed=${isHlsInstanceProcessed}, LevelsPopulated=${isHlsLevelsPopulated}`);
+        // console.log(`[resolution_manager] tryEnableControls Check: Built=${resolutionListElement.dataset.built}, InstanceProcessed=${isHlsInstanceProcessed}, LevelsPopulated=${isHlsLevelsPopulated}`);
 
         // Proceed if initial display is done AND HLS instance processing is complete AND levels have been checked
         if (resolutionListElement.dataset.built === 'true' && isHlsInstanceProcessed && isHlsLevelsPopulated) {
             enableResolutionControls();
         } else {
-             console.log('[resolution_manager] Conditions not met to enable controls.');
+             // console.log('[resolution_manager] Conditions not met to enable controls.');
         }
     }
 
     function enableResolutionControls() {
         if (resolutionListElement.dataset.controlsEnabled === 'true') return; // Already enabled
-        console.log('[resolution_manager] Enabling resolution controls.');
+        // console.log('[resolution_manager] Enabling resolution controls.');
 
         const loadingMsg = document.getElementById('resolution-loading-controls');
         if (loadingMsg) loadingMsg.remove();
 
         // Check if HLS.js is actually being used
         if (!hlsInstance) {
-             console.log('[resolution_manager] HLS.js not active. Controls remain disabled.');
+             // console.log('[resolution_manager] HLS.js not active. Controls remain disabled.');
              resolutionListElement.querySelectorAll('.resolution-item-loading').forEach(item => {
                   item.classList.remove('resolution-item-loading');
                   item.classList.add('resolution-item', 'disabled');
@@ -213,7 +213,7 @@ console.log('[resolution_manager] Initializing...');
                 item.classList.remove('resolution-item-loading');
                 item.classList.add('resolution-item');
             } else {
-                console.warn(`[resolution_manager] Could not match HLS level for parser BW ${parserBandwidth}. Disabling item.`);
+                // console.warn(`[resolution_manager] Could not match HLS level for parser BW ${parserBandwidth}. Disabling item.`);
                 item.classList.remove('resolution-item-loading');
                 item.classList.add('resolution-item', 'disabled');
                 item.style.cursor = 'default';
@@ -223,7 +223,7 @@ console.log('[resolution_manager] Initializing...');
 
         resolutionListElement.dataset.controlsEnabled = 'true';
         updateSelectedVisuals(hlsInstance.currentLevel);
-        console.log('[resolution_manager] Resolution controls enabled.');
+        // console.log('[resolution_manager] Resolution controls enabled.');
     }
 
 
@@ -231,12 +231,12 @@ console.log('[resolution_manager] Initializing...');
         const targetItem = event.target.closest('[data-level-index]');
         // Check if controls are enabled and we have an HLS instance
         if (!targetItem || !hlsInstance || resolutionListElement.dataset.controlsEnabled !== 'true' || targetItem.classList.contains('disabled')) {
-            console.log('[resolution_manager] Click ignored: Controls not enabled, HLS missing, or item disabled.');
+            // console.log('[resolution_manager] Click ignored: Controls not enabled, HLS missing, or item disabled.');
             return;
         }
 
         const levelIndex = parseInt(targetItem.getAttribute('data-level-index'), 10);
-        console.log(`[resolution_manager] User selected level index: ${levelIndex}`);
+        // console.log(`[resolution_manager] User selected level index: ${levelIndex}`);
         hlsInstance.currentLevel = levelIndex;
         updateSelectedVisuals(levelIndex);
     }
@@ -244,13 +244,13 @@ console.log('[resolution_manager] Initializing...');
     // ... (Keep `handleLevelSwitched` and `updateSelectedVisuals` exactly as before) ...
     function handleLevelSwitched(event, data) {
          const actualLevel = data.level;
-         console.log(`[resolution_manager] HLS confirmed level switch to index: ${actualLevel}`);
+         // console.log(`[resolution_manager] HLS confirmed level switch to index: ${actualLevel}`);
          updateSelectedVisuals(actualLevel);
     }
 
     function updateSelectedVisuals(selectedIndex) {
         if (!resolutionListElement) return;
-        console.log(`[resolution_manager] Updating selected visual to index: ${selectedIndex}`);
+        // console.log(`[resolution_manager] Updating selected visual to index: ${selectedIndex}`);
 
         resolutionListElement.querySelectorAll('[data-level-index]').forEach(el => {
             el.classList.remove('selected');
@@ -262,9 +262,9 @@ console.log('[resolution_manager] Initializing...');
         } else {
              if (selectedIndex === -1 && autoModeElement) {
                   autoModeElement.classList.add('selected');
-                  console.log('[resolution_manager] Selected "Auto (ABR)" visually.');
+                  // console.log('[resolution_manager] Selected "Auto (ABR)" visually.');
              } else {
-                  console.warn(`[resolution_manager] Could not find element for level index ${selectedIndex} to visually select.`);
+                  // console.warn(`[resolution_manager] Could not find element for level index ${selectedIndex} to visually select.`);
              }
         }
     }

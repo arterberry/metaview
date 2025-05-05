@@ -89,31 +89,7 @@ function setupUIHandlers() {
     // Add click listener to the container using event delegation for segment selection
     if (uiElements.metadataList) {
         uiElements.metadataList.addEventListener('click', (e) => {
-            const targetElement = e.target.closest('div[data-segment-id]'); // Find the segment container div
-            
-            // if (targetElement) {
-            //     const segmentId = targetElement.getAttribute('data-segment-id');
-            //     const segmentUrl = targetElement.getAttribute('data-segment-url'); // Get URL for fetching
-            //     const segmentType = targetElement.getAttribute('data-segment-type'); // Get type
-
-            //     console.log(`[manifest_ui] Clicked on segment element: ID=${segmentId}, Type=${segmentType}`);
-
-            //     // Retrieve the full segment object if possible (might need access to parser state or cache it here)
-            //     // For now, fetch based on URL. If state access is needed, we'd call HlsParser.getState()
-            //     const parserState = window.HlsParser?.getState();
-            //     const segment = parserState?.segmentMap.get(segmentUrl);
-
-            //     if (segment) {
-            //          selectSegment(segment, targetElement);
-            //     } else if (segmentUrl && segmentType) {
-            //         // Fallback if segment object not found in parser state (e.g., added by hls-listener)
-            //         // Create a minimal object for fetching
-            //         selectSegment({ id: segmentId, url: segmentUrl, type: segmentType }, targetElement);
-            //     } else {
-            //         console.warn(`[manifest_ui] Could not find segment data for ID: ${segmentId}`);
-            //     }
-            // }
-
+            const targetElement = e.target.closest('div[data-segment-id]'); // Find the 
             if (targetElement) {
                 const segmentId = targetElement.getAttribute('data-segment-id');
                 const segmentUrl = targetElement.getAttribute('data-segment-url');
@@ -713,22 +689,16 @@ function getMimeTypeFromUrl(url = '') {
      // Search for 'src=' followed by any characters until '&' or end of string
      const match = window.location.search.match(/[?&]src=([^&]+)/);
      if (match && match[1]) {
-          // The raw value is in match[1], decode it *once* if it was component-encoded
-          // Browsers often automatically decode the query string when accessed via location.search
-          // but let's try decoding just in case it's double-encoded. Usually, it won't be.
           try {
                // Try decoding. If it fails or doesn't change, use the raw value.
                const decoded = decodeURIComponent(match[1]);
                console.log('[manifest_ui] Raw "src" param:', match[1]);
                console.log('[manifest_ui] Decoded "src" param:', decoded);
                // Heuristic: If decoding significantly changed it AND it looks like a URL, use decoded.
-               // Otherwise, stick with the raw value found in the query string.
-               // This handles cases where the SRC itself contains encoded chars that *should* remain encoded.
                if (decoded !== match[1] && (decoded.startsWith('http') || decoded.startsWith('blob'))) {
                     // It seems like it was genuinely encoded, use the decoded version
                     return decoded;
                }
-                // Otherwise, assume the encoding was part of the URL itself, use the raw value
                 return match[1];
 
           } catch (e) {
@@ -743,22 +713,6 @@ function getMimeTypeFromUrl(url = '') {
 
 console.log('[manifest_ui] Ready.');
 
-// Add necessary CSS for .segment-expired, .segment-loading, .segment-error, .segment-expired-badge if not already present
-// const style = document.createElement('style');
-// style.textContent = `
-//  .segment-item.segment-expired { opacity: 0.6; cursor: not-allowed; }
-//  .segment-item.segment-loading { font-style: italic; color: #aaa; }
-//  .segment-item.segment-error { color: red; font-weight: bold; }
-//  .segment-expired-badge { color: #e74c3c; font-weight: bold; margin-left: 5px; font-size: 0.9em; }
-//  .segment-timestamp { color: #888; margin-right: 5px; display: inline-block; width: 80px; text-align: right; font-size: 0.9em; }
-//  .segment-badge { margin-right: 5px; } /* Ensure space around badges */
-//  .segment-label-text { /* Style for the main text part */ }
-//  #metadataList .segment-item { padding: 3px 5px; border-bottom: 1px solid #333; cursor: pointer; display: flex; align-items: center; white-space: nowrap; }
-//  #metadataList .segment-item:hover { background-color: #3a3a3a; }
-//  #metadataList .segment-item.selected { background-color: #4a86e8; color: white; }
-//  #metadataList .segment-item.selected .segment-timestamp { color: #eee; } /* Adjust selected timestamp color */
-//  #metadataList .segment-item.selected .segment-badge { border-color: white; } /* Adjust selected badge border */
-// `;
 
 const style = document.createElement('style');
 style.textContent = `

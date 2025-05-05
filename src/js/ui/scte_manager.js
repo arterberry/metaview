@@ -453,14 +453,6 @@ console.log('[scte_manager] Initializing...');
                 `;
             }
 
-            // Add full URL (already present in the details section, confirmed above)
-            // detectionHtml += `
-            //     <div class="scte-detail-item">
-            //         <span class="scte-detail-label">Full URL:</span>
-            //         <span class="scte-detail-value">${detection.url}</span>
-            //     </div>
-            // `;
-
             // Close the details container
             detectionHtml += `</div>`;
 

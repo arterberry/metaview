@@ -2,7 +2,6 @@
 
 console.log('[hls_parser] Loading...');
 
-// Global manifest state - managed by the parser
 const state = {
     masterUrl: null,
     masterManifest: null,

@@ -1,0 +1,20 @@
+{
+  "name": "metaview",
+  "version": "1.0.0",
+  "description": "MetaView is a detailed HLS player extension for Chrome",
+  "main": "index.js",
+  "scripts": {
+    "test": "karma start"
+  },
+  "keywords": [],
+  "author": "John Eric Arterberry",
+  "license": "ISC",
+  "devDependencies": {
+    "jasmine-core": "^5.7.1",
+    "karma": "^6.4.4",
+    "karma-chrome-launcher": "^3.2.0",
+    "karma-cli": "^2.0.0",
+    "karma-coverage": "^2.2.1",
+    "karma-jasmine": "^5.1.0"
+  }
+}

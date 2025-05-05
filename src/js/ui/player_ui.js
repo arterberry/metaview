@@ -163,34 +163,6 @@ function enforcePointerEvents({ metadataResizeHandle, resizeHandleVertical }) {
     }
 }
 
-/** Tab click handlers */
-// function setupTabSystem() {
-//     const tabButtons = document.querySelectorAll('.tab-button');
-//     const tabPanes = document.querySelectorAll('.tab-pane');
-//     const metaButtons = document.querySelectorAll('.metadata_tab-buttonUpdate');
-//     const metaPanes = document.querySelectorAll('.metadata_tab-paneUpdate, .metadata_tab-paneBodyUpdate');
-
-//     tabButtons.forEach(btn => {
-//         btn.addEventListener('click', () => {
-//             const tabId = btn.getAttribute('data-tab');
-//             tabButtons.forEach(b => b.classList.remove('active'));
-//             tabPanes.forEach(p => p.classList.remove('active'));
-//             btn.classList.add('active');
-//             document.getElementById(`${tabId}-tab`).classList.add('active');
-//         });
-//     });
-
-//     metaButtons.forEach(btn => {
-//         btn.addEventListener('click', () => {
-//             const tabId = btn.getAttribute('data-tab');
-//             metaButtons.forEach(b => b.classList.remove('active'));
-//             metaPanes.forEach(p => p.classList.remove('active'));
-//             btn.classList.add('active');
-//             const selector = tabId === 'headers' ? '#headers-tabUpdate' : '#body-tabUpdate';
-//             document.querySelector(selector).classList.add('active');
-//         });
-//     });
-// }
 /** Tab click handlers (using delegation so dynamically‐added tabs also work) */
 function setupTabSystem() {
     const tabNav = document.querySelector('.tab-nav');

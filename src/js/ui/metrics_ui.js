@@ -965,27 +965,9 @@ console.log('[metrics_ui] Initializing Metrics UI…');
 
     // Assign the temp variable and then Freeze
     window.metaviewAPI.metrics = metrics;
-    
 
     console.log('[metrics_ui] metaviewAPI.metrics defined.'); 
 
 })(); // End IIFE
 
 console.log('[metrics_ui] Metrics UI script finished.');
-
-console.log('[metrics_ui] IIFE finished.'); 
-console.log('[metrics_ui] Checking metaviewAPI:', window.metaviewAPI); 
-console.log('[metrics_ui] Checking metrics:', window.metaviewAPI.metrics);
-console.log('[metrics_ui] Checking getQoEState:', window.metaviewAPI.metrics.getQoEState);
-console.log('[metrics_ui] Checking getCurrentBitrate:', window.metaviewAPI.metrics.getCurrentBitrate);
-console.log('[metrics_ui] Checking getCurrentResolution:', window.metaviewAPI.metrics.getCurrentResolution);
-console.log('[metrics_ui] Checking getCurrentAudioTrack:', window.metaviewAPI.metrics.getCurrentAudioTrack);
-console.log('[metrics_ui] Checking getSegmentCounters:', window.metaviewAPI.metrics.getSegmentCounters);
-console.log('[metrics_ui] Checking getAverageSegmentDownloadTime:', window.metaviewAPI.metrics.getAverageSegmentDownloadTime);
-console.log('[metrics_ui] Checking getAverageThroughput:', window.metaviewAPI.metrics.getAverageThroughput);
-console.log('[metrics_ui] Checking getCDN:', window.metaviewAPI.metrics.getCDN);
-console.log('[metrics_ui] Checking getEventHistory:', window.metaviewAPI.metrics.getEventHistory);
-console.log('[metrics_ui] Script loaded and ready.');
-
-
-

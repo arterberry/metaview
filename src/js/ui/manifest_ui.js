@@ -21,10 +21,10 @@ document.addEventListener('DOMContentLoaded', () => {
         window.HlsParser.init(hlsUrl); // Start the parsing process
     } else if (!hlsUrl) {
         console.warn('[manifest_ui] No HLS URL found in query params for parser.');
-        updateStatus("No HLS stream URL found in the page address.");
+        // updateStatus("No HLS stream URL found in the page address.");
     } else {
         console.error('[manifest_ui] HlsParser not found. Ensure hls_parser.js is loaded first.');
-        updateStatus("Error: HLS Parser module failed to load.");
+        // updateStatus("Error: HLS Parser module failed to load.");
     }
 });
 
@@ -36,14 +36,14 @@ function cacheDOMElements() {
     uiElements.responsePanelUpdate = document.getElementById('responsePanelUpdate'); // For showing/hiding panels
     uiElements.metadataPanel = document.getElementById('metadataPanel'); // For showing/hiding panels
 
-     // Ensure default messages are set
+    // Ensure default messages are set
     if (uiElements.headerContent) uiElements.headerContent.textContent = 'Select a segment or playlist to view details';
     if (uiElements.bodyContent) uiElements.bodyContent.textContent = ''; // Clear body initially
 }
 
 function setupEventListeners() {
     console.log('[manifest_ui] Setting up event listeners for HLS parser and fragment events.');
-    document.addEventListener('hlsStatusUpdate', (e) => updateStatus(e.detail.message));
+    // document.addEventListener('hlsStatusUpdate', (e) => updateStatus(e.detail.message));
     document.addEventListener('hlsSegmentAdded', (e) => addSegmentToUI(e.detail.segment)); // For parsed items
     document.addEventListener('hlsFragLoadedUI', (e) => addSegmentToUI(e.detail)); // For live fragments <<< ADD THIS LISTENER
     document.addEventListener('hlsPlaylistParsed', handlePlaylistParsed);
@@ -73,17 +73,17 @@ function setupUIHandlers() {
             if (targetPane) {
                 targetPane.classList.add('active');
             } else {
-                 console.warn(`[manifest_ui] Tab pane not found for ID: ${tabId}-tabUpdate`);
+                console.warn(`[manifest_ui] Tab pane not found for ID: ${tabId}-tabUpdate`);
             }
         });
     });
 
-     // Ensure initial active tab state matches HTML
-     const initialActiveButton = document.querySelector('.metadata_tab-buttonUpdate.active');
-     const initialTabId = initialActiveButton ? initialActiveButton.getAttribute('data-tab') : 'headers'; // Default to headers
-     const initialPane = document.getElementById(`${initialTabId}-tabUpdate`);
-     document.querySelectorAll('.metadata_tab-paneUpdate, .metadata_tab-paneBodyUpdate').forEach(pane => pane.classList.remove('active'));
-     if (initialPane) initialPane.classList.add('active');
+    // Ensure initial active tab state matches HTML
+    const initialActiveButton = document.querySelector('.metadata_tab-buttonUpdate.active');
+    const initialTabId = initialActiveButton ? initialActiveButton.getAttribute('data-tab') : 'headers'; // Default to headers
+    const initialPane = document.getElementById(`${initialTabId}-tabUpdate`);
+    document.querySelectorAll('.metadata_tab-paneUpdate, .metadata_tab-paneBodyUpdate').forEach(pane => pane.classList.remove('active'));
+    if (initialPane) initialPane.classList.add('active');
 
 
     // Add click listener to the container using event delegation for segment selection
@@ -114,20 +114,20 @@ function setupUIHandlers() {
                     const segmentObject = parserState?.segmentMap.get(segmentUrl); // segmentMap stores segments by URL
 
                     if (segmentObject) {
-                         console.log('[manifest_ui] Found full segment object in state.');
-                         selectSegment(segmentObject, targetElement);
+                        console.log('[manifest_ui] Found full segment object in state.');
+                        selectSegment(segmentObject, targetElement);
                     } else {
-                         // Fallback if segment object not found (e.g., added by hls-listener or state issue)
-                         console.log(`[manifest_ui] Segment object not found in parser state (expected for live fragments/other sources) for URL: ${segmentUrl}. Using minimal info from DOM.`);
-                         selectSegment({ id: segmentId, url: segmentUrl, type: segmentType || 'segment' }, targetElement);
+                        // Fallback if segment object not found (e.g., added by hls-listener or state issue)
+                        console.log(`[manifest_ui] Segment object not found in parser state (expected for live fragments/other sources) for URL: ${segmentUrl}. Using minimal info from DOM.`);
+                        selectSegment({ id: segmentId, url: segmentUrl, type: segmentType || 'segment' }, targetElement);
                     }
                 } else {
-                     // Handle other types like 'unknown', 'error'
-                     console.log(`[manifest_ui] Clicked on element of type: ${segmentType}. Selecting with minimal info.`);
-                     // Get title from element text for display
-                     const titleNode = targetElement.querySelector('.segment-label-text') || targetElement;
-                     const title = titleNode ? titleNode.textContent.trim() : 'Unknown Item';
-                     selectSegment({ id: segmentId, url: segmentUrl, type: segmentType, title: title }, targetElement);
+                    // Handle other types like 'unknown', 'error'
+                    console.log(`[manifest_ui] Clicked on element of type: ${segmentType}. Selecting with minimal info.`);
+                    // Get title from element text for display
+                    const titleNode = targetElement.querySelector('.segment-label-text') || targetElement;
+                    const title = titleNode ? titleNode.textContent.trim() : 'Unknown Item';
+                    selectSegment({ id: segmentId, url: segmentUrl, type: segmentType, title: title }, targetElement);
                 }
             }
 
@@ -142,15 +142,15 @@ function handlePlaylistParsed(event) {
     console.log(`[manifest_ui] Received Playlist Parsed event: Type=${type}, URL=${url}`);
 
     if (type === 'master') {
-         // Update title maybe?
-         const title = getTitleFromManifest(content, url); // Reuse title logic if needed
-         document.title = title;
-         updateStatus(`Master Playlist loaded. ${variants?.length || 0} variants found.`);
+        // Update title maybe?
+        const title = getTitleFromManifest(content, url); // Reuse title logic if needed
+        document.title = title;
+        //  updateStatus(`Master Playlist loaded. ${variants?.length || 0} variants found.`);
     } else if (type === 'media') {
         // Maybe update the status or log something specific about the media playlist
         const parserState = window.HlsParser?.getState();
         const playlistInfo = parserState?.mediaPlaylists[id];
-        updateStatus(`Media Playlist (${playlistInfo?.resolution || id}) parsed. Segments are being added.`);
+        // updateStatus(`Media Playlist (${playlistInfo?.resolution || id}) parsed. Segments are being added.`);
     }
 
     // If a user previously selected the 'Loading Playlist...' item, update its content display
@@ -172,23 +172,23 @@ function handleUpdateSegmentType(event) {
         if (labelSpan && title) {
             labelSpan.textContent = ` ${title}`;
         } else if (!labelSpan && title) {
-             // If no specific label span, update the main text node (less robust)
-             const textNode = Array.from(element.childNodes).find(node => node.nodeType === Node.TEXT_NODE && node.textContent.trim() !== '');
-             if(textNode) textNode.textContent = ` ${title}`;
+            // If no specific label span, update the main text node (less robust)
+            const textNode = Array.from(element.childNodes).find(node => node.nodeType === Node.TEXT_NODE && node.textContent.trim() !== '');
+            if (textNode) textNode.textContent = ` ${title}`;
         }
 
-         // Remove old type badge and add new one
-         element.querySelector('.segment-badge')?.remove();
-         const badge = buildBadge(type); // Assumes buildBadge is available (from segment-tags.js or here)
-         if (badge) {
-             // Insert after the timestamp span if it exists
-             const timeSpan = element.querySelector('span:first-child');
-             if (timeSpan) {
+        // Remove old type badge and add new one
+        element.querySelector('.segment-badge')?.remove();
+        const badge = buildBadge(type); // Assumes buildBadge is available (from segment-tags.js or here)
+        if (badge) {
+            // Insert after the timestamp span if it exists
+            const timeSpan = element.querySelector('span:first-child');
+            if (timeSpan) {
                 timeSpan.parentNode.insertBefore(badge, timeSpan.nextSibling);
-             } else {
-                 element.insertBefore(badge, element.firstChild);
-             }
-         }
+            } else {
+                element.insertBefore(badge, element.firstChild);
+            }
+        }
     } else {
         console.warn(`[manifest_ui] Cannot update type: Element not found for URL ${url}`);
     }
@@ -245,7 +245,7 @@ function addSegmentToUI(segmentData) {
 
     // --- Label Text ---
     let labelText = '';
-    switch(segmentData.type) {
+    switch (segmentData.type) {
         case 'master':
         case 'media':
         case 'unknown':
@@ -290,26 +290,26 @@ function addSegmentToUI(segmentData) {
     if (segmentData.type === 'master' || segmentData.type === 'media' || segmentData.type === 'unknown' || segmentData.type === 'error') {
         // Insert playlists/special types at the beginning or after existing ones
         const lastSpecial = Array.from(uiElements.metadataList.querySelectorAll('.segment-master, .segment-media, .segment-loading, .segment-error')).pop();
-         if (lastSpecial) {
-             lastSpecial.insertAdjacentElement('afterend', el); // Insert after the last special item
-         } else {
-             uiElements.metadataList.prepend(el); // Insert at the very beginning if no specials exist
-         }
+        if (lastSpecial) {
+            lastSpecial.insertAdjacentElement('afterend', el); // Insert after the last special item
+        } else {
+            uiElements.metadataList.prepend(el); // Insert at the very beginning if no specials exist
+        }
     } else if (segmentData.type === 'segment') {
-         // Insert parsed segments AFTER all playlists/specials but BEFORE live fragments
-         const firstFragment = uiElements.metadataList.querySelector('.segment-live-fragment');
-         if (firstFragment) {
-              uiElements.metadataList.insertBefore(el, firstFragment); // Insert before the first live fragment
-         } else {
-             // If no live fragments yet, just append after playlists/specials
-             const lastSpecial = Array.from(uiElements.metadataList.querySelectorAll('.segment-master, .segment-media, .segment-loading, .segment-error')).pop();
-             if (lastSpecial) {
-                  lastSpecial.insertAdjacentElement('afterend', el);
-             } else {
-                  // If no specials either, append (shouldn't happen often if playlists load first)
-                   uiElements.metadataList.appendChild(el);
-             }
-         }
+        // Insert parsed segments AFTER all playlists/specials but BEFORE live fragments
+        const firstFragment = uiElements.metadataList.querySelector('.segment-live-fragment');
+        if (firstFragment) {
+            uiElements.metadataList.insertBefore(el, firstFragment); // Insert before the first live fragment
+        } else {
+            // If no live fragments yet, just append after playlists/specials
+            const lastSpecial = Array.from(uiElements.metadataList.querySelectorAll('.segment-master, .segment-media, .segment-loading, .segment-error')).pop();
+            if (lastSpecial) {
+                lastSpecial.insertAdjacentElement('afterend', el);
+            } else {
+                // If no specials either, append (shouldn't happen often if playlists load first)
+                uiElements.metadataList.appendChild(el);
+            }
+        }
     } else if (segmentData.type === 'fragment') {
         // Append live fragments to the very end of the list
         uiElements.metadataList.appendChild(el);
@@ -319,13 +319,13 @@ function addSegmentToUI(segmentData) {
         if (isScrolledNearBottom) {
             // Use requestAnimationFrame for smoother scrolling after DOM update
             requestAnimationFrame(() => {
-                 uiElements.metadataList.scrollTop = uiElements.metadataList.scrollHeight;
+                uiElements.metadataList.scrollTop = uiElements.metadataList.scrollHeight;
             });
         }
     } else {
-         // Fallback: Append any other unknown types
-         console.log(`[manifest_ui] Unknown segment type "${segmentData.type}" for insertion, appending.`);
-         uiElements.metadataList.appendChild(el);
+        // Fallback: Append any other unknown types
+        console.log(`[manifest_ui] Unknown segment type "${segmentData.type}" for insertion, appending.`);
+        uiElements.metadataList.appendChild(el);
     }
     // --- End Insertion Logic ---
 }
@@ -341,9 +341,9 @@ function selectSegment(segment, segmentElement) {
     if (segmentElement) {
         segmentElement.classList.add('selected');
     } else {
-         // Fallback if element wasn't passed
-         const el = segmentElements.get(segment.id);
-         if (el) el.classList.add('selected');
+        // Fallback if element wasn't passed
+        const el = segmentElements.get(segment.id);
+        if (el) el.classList.add('selected');
     }
 
 
@@ -352,20 +352,20 @@ function selectSegment(segment, segmentElement) {
         // For playlists, show the manifest content
         fetchPlaylistContent(segment.url, segment.type);
     } else if (segment.type === 'unknown' || segment.type === 'error') {
-         // Handle loading/error states
-         updateHeaderContent(`Status: ${segment.title || segment.type}`);
-         updateBodyContent(`URL: ${segment.url}\n\n(${segment.type === 'error' ? 'Cannot fetch details.' : 'Details will load when available.'})`);
-     }else {
+        // Handle loading/error states
+        updateHeaderContent(`Status: ${segment.title || segment.type}`);
+        updateBodyContent(`URL: ${segment.url}\n\n(${segment.type === 'error' ? 'Cannot fetch details.' : 'Details will load when available.'})`);
+    } else {
         // For regular segments, fetch headers and content
         fetchSegmentDetails(segment);
     }
 
-     // Ensure the Response/Body panels are visible
-     if (uiElements.responsePanelUpdate && uiElements.metadataPanel) {
-         // You might adjust layout here if needed, e.g., ensure panels have minimum width
-         // uiElements.metadataPanel.style.flex = '1 1 50%'; // Example adjustment
-         // uiElements.responsePanelUpdate.style.flex = '1 1 50%';
-     }
+    // Ensure the Response/Body panels are visible
+    if (uiElements.responsePanelUpdate && uiElements.metadataPanel) {
+        // You might adjust layout here if needed, e.g., ensure panels have minimum width
+        // uiElements.metadataPanel.style.flex = '1 1 50%'; // Example adjustment
+        // uiElements.responsePanelUpdate.style.flex = '1 1 50%';
+    }
 }
 
 function fetchPlaylistContent(url, type) {
@@ -378,24 +378,24 @@ function fetchPlaylistContent(url, type) {
     let foundInState = false; // Flag to track if we found it in state
 
     if (parserState) {
-       console.log(`[manifest_ui] Checking parser state for ${type} playlist: ${url}`);
-       if (type === 'master' && parserState.masterUrl === url) {
-           content = parserState.masterManifest;
-           if (content) {
+        console.log(`[manifest_ui] Checking parser state for ${type} playlist: ${url}`);
+        if (type === 'master' && parserState.masterUrl === url) {
+            content = parserState.masterManifest;
+            if (content) {
                 console.log('[manifest_ui] Found master content in state.');
                 foundInState = true;
-           }
-       } else if (type === 'media') {
-           // Find the correct media playlist entry in the state object by URL
-           const playlistInfo = Object.values(parserState.mediaPlaylists || {}).find(p => p.url === url);
-           if (playlistInfo && playlistInfo.content) {
-               content = playlistInfo.content;
-               console.log(`[manifest_ui] Found media content in state for URL: ${url}`);
-               foundInState = true;
-           } else {
+            }
+        } else if (type === 'media') {
+            // Find the correct media playlist entry in the state object by URL
+            const playlistInfo = Object.values(parserState.mediaPlaylists || {}).find(p => p.url === url);
+            if (playlistInfo && playlistInfo.content) {
+                content = playlistInfo.content;
+                console.log(`[manifest_ui] Found media content in state for URL: ${url}`);
+                foundInState = true;
+            } else {
                 console.log(`[manifest_ui] Media playlist content not found in state for URL: ${url}. Known media playlist URLs:`, Object.values(parserState.mediaPlaylists || {}).map(p => p.url));
-           }
-       }
+            }
+        }
     } else {
         console.warn('[manifest_ui] Parser state not available to check for cached content.');
     }
@@ -428,7 +428,7 @@ function fetchPlaylistContent(url, type) {
                 return res.text();
             })
             .then(text => {
-                 displayPlaylistDetails(url, text, type);
+                displayPlaylistDetails(url, text, type);
             })
             .catch(err => {
                 console.error(`[manifest_ui] ${type} playlist fetch error:`, err);
@@ -439,18 +439,18 @@ function fetchPlaylistContent(url, type) {
     }
 }
 
- function displayPlaylistDetails(url, content, type) {
-     // Update headers (show minimal info, headers were maybe shown during fetch)
-      updateHeaderContent(`Playlist Details (${type})\nURL: ${url}\nType: ${isMasterPlaylist(content) ? 'Master' : 'Media'}\nLines: ${content.split('\n').length}`);
-     // Update body with the manifest text
-     updateBodyContent(content);
+function displayPlaylistDetails(url, content, type) {
+    // Update headers (show minimal info, headers were maybe shown during fetch)
+    updateHeaderContent(`Playlist Details (${type})\nURL: ${url}\nType: ${isMasterPlaylist(content) ? 'Master' : 'Media'}\nLines: ${content.split('\n').length}`);
+    // Update body with the manifest text
+    updateBodyContent(content);
 
-     // Ensure the 'body' tab is active for viewing manifest content
-     document.querySelector('.metadata_tab-buttonUpdate[data-tab="body"]')?.click();
- }
+    // Ensure the 'body' tab is active for viewing manifest content
+    document.querySelector('.metadata_tab-buttonUpdate[data-tab="body"]')?.click();
+}
 
 
- function fetchSegmentDetails(segment) {
+function fetchSegmentDetails(segment) {
     updateHeaderContent(`Fetching details for ${getSegmentDisplayName(segment.url)}...`);
     updateBodyContent('Loading content...');
 
@@ -458,18 +458,18 @@ function fetchPlaylistContent(url, type) {
         .then(res => {
             // Display Headers
             const headers = [];
-             headers.push(`Status: ${res.status} ${res.statusText}`);
-             headers.push(`URL: ${res.url}`); // Show final URL after potential redirects
-             res.headers.forEach((v, k) => headers.push(`${k}: ${v}`));
+            headers.push(`Status: ${res.status} ${res.statusText}`);
+            headers.push(`URL: ${res.url}`); // Show final URL after potential redirects
+            res.headers.forEach((v, k) => headers.push(`${k}: ${v}`));
             //  updateHeaderContent(`Response Headers:\n${'-'.repeat(20)}\n${headers.join('\n')}`);
-             updateHeaderContent(`${headers.join('\n')}`);
+            updateHeaderContent(`${headers.join('\n')}`);
 
             if (!res.ok) {
                 throw new Error(`HTTP error ${res.status} ${res.statusText}`);
             }
 
             // Switch back to header tab by default after fetch
-             document.querySelector('.metadata_tab-buttonUpdate[data-tab="headers"]')?.click();
+            document.querySelector('.metadata_tab-buttonUpdate[data-tab="headers"]')?.click();
 
             return res.arrayBuffer(); // Get content as ArrayBuffer for hex dump
         })
@@ -481,7 +481,7 @@ function fetchPlaylistContent(url, type) {
             updateHeaderContent(`Error fetching segment: ${err.message}\nURL: ${segment.url}`);
             updateBodyContent('Failed to load segment content.');
             // Dispatch or handle expiration visually
-             handleSegmentExpired({ detail: { id: segment.id, url: segment.url } });
+            handleSegmentExpired({ detail: { id: segment.id, url: segment.url } });
         });
 }
 
@@ -492,27 +492,27 @@ function displaySegmentContent(buffer, segment) {
     // Optionally, add more info to the header panel *after* the HTTP headers
     const headerEl = uiElements.headerContent;
     if (headerEl) {
-         const segmentInfo = [
-             ``, // Spacer
-             `Segment Info:`,
-             `${'-'.repeat(20)}`,
-             `ID: ${segment.id}`,
-             `Sequence: ${segment.sequence ?? 'N/A'}`,
-             `Duration: ${segment.duration?.toFixed(3) ?? 'N/A'}s`,
-             `Size: ${buffer.byteLength} bytes`,
-             `Est. Bitrate: ${segment.duration > 0 ? Math.round(buffer.byteLength * 8 / segment.duration / 1000) : 'N/A'} kbps`,
-             `Type: ${getMimeTypeFromUrl(segment.url)}`, // getMimeTypeFromUrl needs to be defined/available
-             segment.programDateTime ? `PDT: ${segment.programDateTime.toISOString()}` : 'PDT: N/A',
-             segment.discontinuity ? `Discontinuity: Yes` : '',
-             segment.encryption ? `Encryption: ${segment.encryption.method}` : '',
-             segment.byteRange ? `Byte Range: ${segment.byteRange.length}@${segment.byteRange.offset ?? 0}` : '',
-         ].filter(Boolean).join('\n'); // Filter out empty lines
+        const segmentInfo = [
+            ``, // Spacer
+            `Segment Info:`,
+            `${'-'.repeat(20)}`,
+            `ID: ${segment.id}`,
+            `Sequence: ${segment.sequence ?? 'N/A'}`,
+            `Duration: ${segment.duration?.toFixed(3) ?? 'N/A'}s`,
+            `Size: ${buffer.byteLength} bytes`,
+            `Est. Bitrate: ${segment.duration > 0 ? Math.round(buffer.byteLength * 8 / segment.duration / 1000) : 'N/A'} kbps`,
+            `Type: ${getMimeTypeFromUrl(segment.url)}`, // getMimeTypeFromUrl needs to be defined/available
+            segment.programDateTime ? `PDT: ${segment.programDateTime.toISOString()}` : 'PDT: N/A',
+            segment.discontinuity ? `Discontinuity: Yes` : '',
+            segment.encryption ? `Encryption: ${segment.encryption.method}` : '',
+            segment.byteRange ? `Byte Range: ${segment.byteRange.length}@${segment.byteRange.offset ?? 0}` : '',
+        ].filter(Boolean).join('\n'); // Filter out empty lines
 
-         headerEl.textContent += segmentInfo; // Append segment info to existing headers
+        headerEl.textContent += segmentInfo; // Append segment info to existing headers
     }
 
-     // Ensure header tab is active initially when displaying segment details
-     document.querySelector('.metadata_tab-buttonUpdate[data-tab="headers"]')?.click();
+    // Ensure header tab is active initially when displaying segment details
+    document.querySelector('.metadata_tab-buttonUpdate[data-tab="headers"]')?.click();
 }
 
 
@@ -528,13 +528,13 @@ function updateBodyContent(content) {
     }
 }
 
-function updateStatus(msg) {
-    if (uiElements.statusBar) {
-        uiElements.statusBar.textContent = msg;
-        // Optional: Add timestamp?
-        // uiElements.statusBar.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
-    }
-}
+// function updateStatus(msg) {
+//     if (uiElements.statusBar) {
+//         uiElements.statusBar.textContent = msg;
+//         // Optional: Add timestamp?
+//         // uiElements.statusBar.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+//     }
+// }
 
 function handleSegmentExpired(event) {
     const { id, url } = event.detail;
@@ -542,25 +542,25 @@ function handleSegmentExpired(event) {
     const element = id ? segmentElements.get(id) : document.querySelector(`div[data-segment-url="${url}"]`);
 
     if (element && !element.classList.contains('segment-expired')) {
-         element.classList.add('segment-expired');
-         element.style.opacity = '0.6'; // Dim expired segments
-         element.style.cursor = 'not-allowed';
+        element.classList.add('segment-expired');
+        element.style.opacity = '0.6'; // Dim expired segments
+        element.style.cursor = 'not-allowed';
 
-         // Optionally add a visual badge if segment-tags.js isn't handling it
-         if (!element.querySelector('.segment-expired-badge')) { // Check if badge exists
-             const badge = document.createElement('span');
-             badge.className = 'segment-expired-badge'; // Use a specific class
-             badge.textContent = ' FAILED'; // Or 'EXPIRED'
-             badge.style.color = 'red';
-             badge.style.fontWeight = 'bold';
-             element.appendChild(badge);
-         }
+        // Optionally add a visual badge if segment-tags.js isn't handling it
+        if (!element.querySelector('.segment-expired-badge')) { // Check if badge exists
+            const badge = document.createElement('span');
+            badge.className = 'segment-expired-badge'; // Use a specific class
+            badge.textContent = ' FAILED'; // Or 'EXPIRED'
+            badge.style.color = 'red';
+            badge.style.fontWeight = 'bold';
+            element.appendChild(badge);
+        }
 
-         // If this segment was selected, update the panels to show it failed
-         if (element.classList.contains('selected')) {
-             updateHeaderContent(`Segment Failed / Expired\nURL: ${url}`);
-             updateBodyContent('Could not retrieve segment content. It may have expired or the request failed.');
-         }
+        // If this segment was selected, update the panels to show it failed
+        if (element.classList.contains('selected')) {
+            updateHeaderContent(`Segment Failed / Expired\nURL: ${url}`);
+            updateBodyContent('Could not retrieve segment content. It may have expired or the request failed.');
+        }
     }
 }
 
@@ -624,17 +624,17 @@ function formatHexDump(buffer, bytesPerLine = 16) {
                 const byte = bytes[i + j];
                 // Lookup hex characters directly
                 hexString += hexChars[byte >> 4] + hexChars[byte & 0x0F] + ' ';
-                 // Use dot for non-printable ASCII (0-31 and 127+)
-                 asciiString += (byte >= 32 && byte < 127) ? String.fromCharCode(byte) : '.';
+                // Use dot for non-printable ASCII (0-31 and 127+)
+                asciiString += (byte >= 32 && byte < 127) ? String.fromCharCode(byte) : '.';
             } else {
                 // Pad line if buffer length is not multiple of bytesPerLine
                 hexString += '   '; // 3 spaces for padding (2 hex + 1 space)
-                 asciiString += ' '; // Pad ASCII representation
+                asciiString += ' '; // Pad ASCII representation
             }
-             // Add extra space after 8 bytes for readability
-             if (j === (bytesPerLine / 2) - 1) {
-                 hexString += ' ';
-             }
+            // Add extra space after 8 bytes for readability
+            if (j === (bytesPerLine / 2) - 1) {
+                hexString += ' ';
+            }
         }
 
         lines.push(`${address}  ${hexString} |${asciiString}|`);
@@ -645,71 +645,71 @@ function formatHexDump(buffer, bytesPerLine = 16) {
 
 // Helper function (needed if not in shared utils)
 function getMimeTypeFromUrl(url = '') {
-     const extMatch = url.match(/\.([a-z0-9]+)(?:[?#]|$)/i); // Extract extension safely
-     const ext = extMatch ? extMatch[1].toLowerCase() : '';
-     return {
-         ts: 'video/MP2T',
-         aac: 'audio/aac',
-         mp4: 'video/mp4', // Covers fmp4 too
-         m4s: 'video/iso.segment', // More specific for DASH/CMAF CENC
-         m4a: 'audio/mp4',
-         m4v: 'video/mp4',
-         mp3: 'audio/mpeg',
-         webm: 'video/webm',
-         vtt: 'text/vtt',
-         srt: 'text/srt',
-         m3u8: 'application/vnd.apple.mpegurl',
-         mpd: 'application/dash+xml',
-     }[ext] || 'application/octet-stream'; // Default
- }
+    const extMatch = url.match(/\.([a-z0-9]+)(?:[?#]|$)/i); // Extract extension safely
+    const ext = extMatch ? extMatch[1].toLowerCase() : '';
+    return {
+        ts: 'video/MP2T',
+        aac: 'audio/aac',
+        mp4: 'video/mp4', // Covers fmp4 too
+        m4s: 'video/iso.segment', // More specific for DASH/CMAF CENC
+        m4a: 'audio/mp4',
+        m4v: 'video/mp4',
+        mp3: 'audio/mpeg',
+        webm: 'video/webm',
+        vtt: 'text/vtt',
+        srt: 'text/srt',
+        m3u8: 'application/vnd.apple.mpegurl',
+        mpd: 'application/dash+xml',
+    }[ext] || 'application/octet-stream'; // Default
+}
 
- // Helper function (needed if not in shared utils)
- function getTitleFromManifest(content, baseUrl) {
-     try {
-         const titleMatch = content.match(/#EXT-X-SESSION-DATA:.*?NAME="title".*?,.*?VALUE="([^"]+)"/i);
-         if (titleMatch && titleMatch[1]) {
-             return `HLS Player - ${titleMatch[1]}`;
-         }
-         // Fallback to filename
-         const url = new URL(baseUrl);
-         const filename = url.pathname.split('/').pop();
-         return filename ? `HLS Player - ${filename}` : 'HLS Player';
-     } catch {
-         return 'HLS Player'; // Generic fallback
-     }
- }
+// Helper function (needed if not in shared utils)
+function getTitleFromManifest(content, baseUrl) {
+    try {
+        const titleMatch = content.match(/#EXT-X-SESSION-DATA:.*?NAME="title".*?,.*?VALUE="([^"]+)"/i);
+        if (titleMatch && titleMatch[1]) {
+            return `HLS Player - ${titleMatch[1]}`;
+        }
+        // Fallback to filename
+        const url = new URL(baseUrl);
+        const filename = url.pathname.split('/').pop();
+        return filename ? `HLS Player - ${filename}` : 'HLS Player';
+    } catch {
+        return 'HLS Player'; // Generic fallback
+    }
+}
 
- // Make utility functions available if needed by segment-tags.js directly
- window.buildBadge = typeof buildBadge === 'function' ? buildBadge : () => null; // Pass through if exists
- window.classifySegment = typeof classifySegment === 'function' ? classifySegment : () => 'Segment'; // Pass through if exists
+// Make utility functions available if needed by segment-tags.js directly
+window.buildBadge = typeof buildBadge === 'function' ? buildBadge : () => null; // Pass through if exists
+window.classifySegment = typeof classifySegment === 'function' ? classifySegment : () => 'Segment'; // Pass through if exists
 
 
- // Extracts the full raw src from the query without decoding
- function getRawSrcUrl() {
-     // Search for 'src=' followed by any characters until '&' or end of string
-     const match = window.location.search.match(/[?&]src=([^&]+)/);
-     if (match && match[1]) {
-          try {
-               // Try decoding. If it fails or doesn't change, use the raw value.
-               const decoded = decodeURIComponent(match[1]);
-               console.log('[manifest_ui] Raw "src" param:', match[1]);
-               console.log('[manifest_ui] Decoded "src" param:', decoded);
-               // Heuristic: If decoding significantly changed it AND it looks like a URL, use decoded.
-               if (decoded !== match[1] && (decoded.startsWith('http') || decoded.startsWith('blob'))) {
-                    // It seems like it was genuinely encoded, use the decoded version
-                    return decoded;
-               }
-                return match[1];
+// Extracts the full raw src from the query without decoding
+function getRawSrcUrl() {
+    // Search for 'src=' followed by any characters until '&' or end of string
+    const match = window.location.search.match(/[?&]src=([^&]+)/);
+    if (match && match[1]) {
+        try {
+            // Try decoding. If it fails or doesn't change, use the raw value.
+            const decoded = decodeURIComponent(match[1]);
+            console.log('[manifest_ui] Raw "src" param:', match[1]);
+            console.log('[manifest_ui] Decoded "src" param:', decoded);
+            // Heuristic: If decoding significantly changed it AND it looks like a URL, use decoded.
+            if (decoded !== match[1] && (decoded.startsWith('http') || decoded.startsWith('blob'))) {
+                // It seems like it was genuinely encoded, use the decoded version
+                return decoded;
+            }
+            return match[1];
 
-          } catch (e) {
-               console.warn('[manifest_ui] Error decoding src param, using raw value:', e);
-               return match[1]; // Use raw value if decoding fails
-          }
+        } catch (e) {
+            console.warn('[manifest_ui] Error decoding src param, using raw value:', e);
+            return match[1]; // Use raw value if decoding fails
+        }
 
-     }
-      console.log('[manifest_ui] "src" parameter not found in query string.');
-     return null;
- }
+    }
+    console.log('[manifest_ui] "src" parameter not found in query string.');
+    return null;
+}
 
 console.log('[manifest_ui] Ready.');
 

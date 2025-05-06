@@ -5,7 +5,7 @@ console.log('[metrics_ui] Initializing Metrics UI…');
 
 (function () {
 
-    // console.log('[metrics_ui] IIFE running');
+    console.log('[metrics_ui] IIFE running');
 
     const bufferStalledState = {
         start: null,
@@ -49,7 +49,7 @@ console.log('[metrics_ui] Initializing Metrics UI…');
     // DOM Ready Listener
     // -----------------------
     document.addEventListener('DOMContentLoaded', () => {
-        // console.log('[metrics_ui] DOMContentLoaded');
+        console.log('[metrics_ui] DOMContentLoaded');
         setupDetailTabs();
         updateQoEDisplay(); // Initial render with N/A values
     });
@@ -58,19 +58,19 @@ console.log('[metrics_ui] Initializing Metrics UI…');
     // HLS Player Loaded Listener (Crucial Fix Here)
     // -----------------------
     document.addEventListener('hlsLoaded', e => {
-        // console.log('[metrics_ui] hlsLoaded event received');
+        console.log('[metrics_ui] hlsLoaded event received');
 
         // 1. Get the HLS instance directly from the event detail
         const hls = e.detail.hls;
 
         // 2. Check if the HLS instance exists
         if (!hls) {
-            // console.error('[metrics_ui] hlsLoaded event fired, but no HLS instance found in e.detail.hls. Cannot attach listeners.');
+            console.error('[metrics_ui] hlsLoaded event fired, but no HLS instance found in e.detail.hls. Cannot attach listeners.');
             return; // Stop if no hls instance
         }
 
         // 3. If the HLS instance IS valid, call hookVideoAndHls and PASS the instance
-        // console.log('[metrics_ui] HLS instance found, calling hookVideoAndHls...');
+        console.log('[metrics_ui] HLS instance found, calling hookVideoAndHls...');
         hookVideoAndHls(hls); // Pass the 'hls' instance as an argument
 
         // 4. Optional: Initial UI update (usually not needed as events trigger updates)
@@ -86,13 +86,13 @@ console.log('[metrics_ui] Initializing Metrics UI…');
         // Select ONLY the tab container within the main qoe-tab pane
         const tabsContainer = document.querySelector('#qoe-tab .qoe-details-tabs'); 
         if (!tabsContainer) {
-            // console.warn('[metrics_ui] Could not find QoE details tabs container.');
+            console.warn('[metrics_ui] Could not find QoE details tabs container.');
             return;
         }
         // Find the content container relative to the tabs
         const contentContainer = tabsContainer.nextElementSibling; 
         if (!contentContainer || !contentContainer.classList.contains('qoe-details-content')) {
-            // console.warn('[metrics_ui] Could not find QoE details content container.');
+            console.warn('[metrics_ui] Could not find QoE details content container.');
             return;
         }
 
@@ -117,7 +117,7 @@ console.log('[metrics_ui] Initializing Metrics UI…');
             if (panel) {
                 panel.classList.add('active');
             } else {
-                // console.warn(`[metrics_ui] Panel with ID ${panelId} not found.`);
+                console.warn(`[metrics_ui] Panel with ID ${panelId} not found.`);
             }
         });
     }
@@ -128,7 +128,7 @@ console.log('[metrics_ui] Initializing Metrics UI…');
     // Accepts the HLS instance as a parameter
     // -----------------------
     function hookVideoAndHls(hls) {
-        // console.log('[metrics_ui] hookVideoAndHls called with HLS instance:', hls);
+        console.log('[metrics_ui] hookVideoAndHls called with HLS instance:', hls);
 
         // Listener for CDN info from other modules (if applicable)
         document.addEventListener('cdnInfoDetected', e => {
@@ -143,14 +143,14 @@ console.log('[metrics_ui] Initializing Metrics UI…');
             if (stats && stats.tfirst > 0 && stats.trequest > 0 && stats.tfirst >= stats.trequest) {
                 const latencyMs = stats.tfirst - stats.trequest;
                 qoeData.playlistLatencies.push(latencyMs);
-                // // console.log(`[metrics_ui] Playlist Latency (${eventName}): ${latencyMs.toFixed(0)} ms`); // Debug log
+                console.log(`[metrics_ui] Playlist Latency (${eventName}): ${latencyMs.toFixed(0)} ms`); // Debug log
                 updateQoEDisplay(); // Update display after getting new latency data
             }
         };
 
         // --- Video Element Listeners ---
         if (video) {
-            // console.log('[metrics_ui] Attaching video element listeners');
+            console.log('[metrics_ui] Attaching video element listeners');
             qoeData.startTime = performance.now();
             video.addEventListener('loadstart', () => {
                 qoeData.loadStart = performance.now();
@@ -167,7 +167,7 @@ console.log('[metrics_ui] Initializing Metrics UI…');
                 if (video.audioTracks && video.audioTracks.length > 0 && qoeData.audioTracks.length === 0) {
                     addEvent(`Detected ${video.audioTracks.length} native audio track(s) (might be muxed)`);
                 } else if (video.audioTracks && video.audioTracks.length === 0 && qoeData.audioTracks.length > 0 && qoeData.audioTracks[0]?.name?.includes('Inferred')) {
-                     // console.log('[metrics_ui] Native video element reports NO audio tracks, but inferred track exists.');
+                     console.log('[metrics_ui] Native video element reports NO audio tracks, but inferred track exists.');
                 }
             });
             video.addEventListener('waiting', () => {
@@ -196,13 +196,13 @@ console.log('[metrics_ui] Initializing Metrics UI…');
                 updateQoEDisplay();
             });
         } else {
-             // console.error("[metrics_ui] Video element #hlsVideoPlayer not found!");
+             console.error("[metrics_ui] Video element #hlsVideoPlayer not found!");
         }
 
         // --- HLS.js Event Listeners ---
         // Ensure HLS instance is valid before attaching listeners
         if (hls && typeof hls.on === 'function') {
-            // console.log('[metrics_ui] Attaching HLS.js event listeners');
+            console.log('[metrics_ui] Attaching HLS.js event listeners');
 
             hls.on(Hls.Events.LEVEL_SWITCHED, (_, data) => {
                 qoeData.qualitySwitches++;
@@ -234,7 +234,7 @@ console.log('[metrics_ui] Initializing Metrics UI…');
                              addEvent(`Active audio track codec updated to ${newCodec}`, 'audio');
                         } else if (activeTrack && activeTrack.codec !== newCodec) {
                              // Potentially log a mismatch if codec changes for an explicit track?
-                             // console.warn(`Codec mismatch on level switch for track ${activeTrack.id}: ${activeTrack.codec} vs ${newCodec}`);
+                             console.warn(`Codec mismatch on level switch for track ${activeTrack.id}: ${activeTrack.codec} vs ${newCodec}`);
                              qoeData.currentAudioCodec = newCodec; // Assume level info is correct for current playback state
                         } else {
                              qoeData.currentAudioCodec = newCodec; // Update global state if no specific track match needed update
@@ -261,7 +261,7 @@ console.log('[metrics_ui] Initializing Metrics UI…');
                     url: data.frag.url
                 };
                 qoeData.totalSegmentsRequested++;
-                // console.log(`[metrics_ui] FRAG_LOADING: SN=${data.frag.sn}, Req=${qoeData.totalSegmentsRequested}`); // Debug log
+                console.log(`[metrics_ui] FRAG_LOADING: SN=${data.frag.sn}, Req=${qoeData.totalSegmentsRequested}`); // Debug log
                 updateQoEDisplay(); // Update success rate display immediately
             });
 
@@ -280,7 +280,7 @@ console.log('[metrics_ui] Initializing Metrics UI…');
                 const bytes = data.stats.total;
 
                 qoeData.totalSegmentsLoaded++;
-                 // console.log(`[metrics_ui] FRAG_LOADED: SN=${data.frag.sn}, Loaded=${qoeData.totalSegmentsLoaded}, Time=${loadMs.toFixed(0)}ms`); // Debug log
+                 console.log(`[metrics_ui] FRAG_LOADED: SN=${data.frag.sn}, Loaded=${qoeData.totalSegmentsLoaded}, Time=${loadMs.toFixed(0)}ms`); // Debug log
 
                 if (loadMs > 0) {
                     qoeData.segmentDownloadTimes.push(loadMs);
@@ -321,7 +321,7 @@ console.log('[metrics_ui] Initializing Metrics UI…');
             });
 
             hls.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
-                // console.log('[metrics_ui] MANIFEST_PARSED');
+                console.log('[metrics_ui] MANIFEST_PARSED');
                 let explicitAudioTracksFound = false;
 
                 if (data.stats) {
@@ -406,7 +406,7 @@ console.log('[metrics_ui] Initializing Metrics UI…');
             });
 
             hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, (_, data) => {
-                 // console.log('[metrics_ui] AUDIO_TRACKS_UPDATED fired');
+                 console.log('[metrics_ui] AUDIO_TRACKS_UPDATED fired');
                  const previouslyInferred = qoeData.audioTracks.length === 1 && qoeData.audioTracks[0].id === 0;
 
                  if (data.audioTracks && data.audioTracks.length > 0) {
@@ -496,7 +496,7 @@ console.log('[metrics_ui] Initializing Metrics UI…');
                     (data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR ||
                         data.details === Hls.ErrorDetails.FRAG_LOAD_TIMEOUT)) {
                     qoeData.totalSegmentsFailed++;
-                    // console.log(`[metrics_ui] Segment network failure detected: ${data.details}, FailCount=${qoeData.totalSegmentsFailed}`);
+                    console.log(`[metrics_ui] Segment network failure detected: ${data.details}, FailCount=${qoeData.totalSegmentsFailed}`);
                 }
                 // Check for Media Errors (like parsing) related to fragments
                 else if (data.type === Hls.ErrorTypes.MEDIA_ERROR &&
@@ -505,11 +505,11 @@ console.log('[metrics_ui] Initializing Metrics UI…');
                     data.context.type.toLowerCase() === 'fragment' && // Compare with string "fragment"
                     data.details === Hls.ErrorDetails.FRAG_PARSING_ERROR) {
                     qoeData.totalSegmentsFailed++;
-                    // console.log(`[metrics_ui] Segment parsing failure detected, FailCount=${qoeData.totalSegmentsFailed}`);
+                    console.log(`[metrics_ui] Segment parsing failure detected, FailCount=${qoeData.totalSegmentsFailed}`);
                 }
                 // ***** END CORRECTION *****
 
-                // console.error('HLS Error Event:', data); // Log full error object
+                console.error('HLS Error Event:', data); // Log full error object
                 addEvent(errorMessage, 'error');
 
                 // Log potential audio-specific errors
@@ -531,7 +531,7 @@ console.log('[metrics_ui] Initializing Metrics UI…');
             // });
 
         } else {
-             // console.error("[metrics_ui] HLS instance provided to hookVideoAndHls was invalid or missing 'on' method.");
+             console.error("[metrics_ui] HLS instance provided to hookVideoAndHls was invalid or missing 'on' method.");
         }
     } // End hookVideoAndHls
 
@@ -542,7 +542,7 @@ console.log('[metrics_ui] Initializing Metrics UI…');
     function renderQoS() {
         const container = document.getElementById('qosContainer');
         if (!container) {
-            // console.warn('[metrics_ui] QoS container not found'); // Only log once if needed
+            console.warn('[metrics_ui] QoS container not found'); // Only log once if needed
             return;
         }
 
@@ -735,19 +735,19 @@ console.log('[metrics_ui] Initializing Metrics UI…');
 
             // Update only if CDN was identified (not 'Unknown') AND it's different from the current stored CDN
             if (cdn !== 'Unknown' && cdn !== currentCDN) {
-                // console.log(`CDN detected: ${cdn} (Previous: ${currentCDN}). Updating state.`); // Added detail for debugging
+                console.log(`CDN detected: ${cdn} (Previous: ${currentCDN}). Updating state.`); // Added detail for debugging
                 qoeData.cdnProvider = cdn;
                 addEvent(`CDN detected: ${cdn}`, 'cdn');
                 // No need to call updateQoEDisplay here if FRAG_LOADED handles it
             } else if (cdn !== 'Unknown' && cdn === currentCDN) {
                 // Optional: Log if detection matches current state, useful for debugging repeated calls
-                // console.log(`CDN reaffirmed: ${cdn}`);
+                console.log(`CDN reaffirmed: ${cdn}`);
             } else if (cdn === 'Unknown') {
                 // Optional: Log if no CDN was detected
-                // console.log(`CDN detection resulted in 'Unknown' for URL: ${url}`);
+                console.log(`CDN detection resulted in 'Unknown' for URL: ${url}`);
             }
         } else {
-            // console.warn("qoeData or addEvent not available in detectCDN scope.");
+            console.warn("qoeData or addEvent not available in detectCDN scope.");
         }
 
         // Optional: Return the detected CDN name
@@ -759,7 +759,7 @@ console.log('[metrics_ui] Initializing Metrics UI…');
     // Update all UI pieces
     // -----------------------
     function updateQoEDisplay() {
-       // console.log('[metrics_ui] updateQoEDisplay called'); // Frequent log, uncomment for deep debugging
+       console.log('[metrics_ui] updateQoEDisplay called'); // Frequent log, uncomment for deep debugging
 
         // Update main playback metrics
         const rows = [

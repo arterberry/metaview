@@ -29,7 +29,7 @@ console.log('[scte_manager] Initializing...');
     document.addEventListener('DOMContentLoaded', init);
 
     function init() {
-        // console.log('[scte_manager] DOM loaded, setting up SCTE detection');
+        console.log('[scte_manager] DOM loaded, setting up SCTE detection');
 
         // Find or create container elements
         scteContainer = document.getElementById('scteContainer');
@@ -48,14 +48,14 @@ console.log('[scte_manager] Initializing...');
         updateScteStatusDisplay();
         updateAdTimeDisplay();
 
-        // console.log('[scte_manager] Initialization complete');
+        console.log('[scte_manager] Initialization complete');
     }
 
     function createScteUI() {
         // Find the parent element where we'll insert our UI
         const parentElement = document.querySelector('#inspect-tab');
         if (!parentElement) {
-            // console.error('[scte_manager] Parent element for SCTE UI not found');
+            console.error('[scte_manager] Parent element for SCTE UI not found');
             return;
         }
 
@@ -94,7 +94,7 @@ console.log('[scte_manager] Initializing...');
     }
 
     function resetState() {
-        // console.log('[scte_manager] Resetting SCTE detection state');
+        console.log('[scte_manager] Resetting SCTE detection state');
         state.scteDetections = [];
         state.active = false;
         state.cumulativeAdTime = 0;
@@ -109,7 +109,7 @@ console.log('[scte_manager] Initializing...');
 
         // Check if segment URL contains "/creatives/" as per Fox streams pattern
         if (segment.url.includes('/creatives/')) {
-            // console.log('[scte_manager] Potential SCTE-35 creative detected:', segment.url);
+            console.log('[scte_manager] Potential SCTE-35 creative detected:', segment.url);
             analyzeScteSegment(segment);
         }
     }
@@ -201,7 +201,7 @@ console.log('[scte_manager] Initializing...');
                     }
                 }
             } catch (e) {
-                // console.warn('[scte_manager] Error parsing URL parameters:', e);
+                console.warn('[scte_manager] Error parsing URL parameters:', e);
             }
 
             // Extract path components
@@ -221,7 +221,7 @@ console.log('[scte_manager] Initializing...');
                 info.timeMarker = timeMatch[2];
             }
         } catch (e) {
-            // console.error('[scte_manager] Error parsing SCTE URL:', e);
+            console.error('[scte_manager] Error parsing SCTE URL:', e);
         }
 
         return info;
@@ -264,7 +264,7 @@ console.log('[scte_manager] Initializing...');
                 provider.confidence = "medium";
             }
         } catch (e) {
-            // console.warn('[scte_manager] Error detecting provider:', e);
+            console.warn('[scte_manager] Error detecting provider:', e);
         }
 
         return provider;
@@ -520,12 +520,12 @@ console.log('[scte_manager] Initializing...');
         getState: () => ({...state}),
         resetState,
         analyzeUrl: (url) => {
-            // console.log('[scte_manager] Manual URL analysis:', extractScteInfo(url));
+            console.log('[scte_manager] Manual URL analysis:', extractScteInfo(url));
             return extractScteInfo(url);
         },
         addProvider: (key, name) => {
             state.knownProviders[key.toLowerCase()] = name;
-            // console.log('[scte_manager] Added provider:', key, name);
+            console.log('[scte_manager] Added provider:', key, name);
         }
     };
 

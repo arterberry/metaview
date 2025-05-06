@@ -31,7 +31,7 @@ function dispatchSegmentAdded(segment) {
         document.dispatchEvent(new CustomEvent('hlsSegmentAdded', { detail: { segment } }));
     } else {
         // Optionally update existing segment if needed (e.g., new metadata)
-        // console.log(`[hls_parser] Segment already known: ${segment.url}`);
+        console.log(`[hls_parser] Segment already known: ${segment.url}`);
     }
 }
 
@@ -44,7 +44,7 @@ function dispatchPlaylistParsed(type, details) { // type = 'master' or 'media'
 function initHlsParser(url) {
     if (!url) {
         dispatchStatusUpdate("Error: No HLS URL provided.");
-        // console.error("[hls_parser] Initialization failed: No URL.");
+        console.error("[hls_parser] Initialization failed: No URL.");
         return;
     }
     state.masterUrl = url;
@@ -73,16 +73,16 @@ function initHlsParser(url) {
 
 
             if (isMaster) {
-                // console.log('[hls_parser] Detected master playlist');
+                console.log('[hls_parser] Detected master playlist');
                 parseMasterPlaylist(content, url);
             } else {
-                // console.log('[hls_parser] Detected media playlist');
+                console.log('[hls_parser] Detected media playlist');
                 handleDirectMediaPlaylist(content, url);
             }
             state.initialLoadComplete = true;
         })
         .catch(err => {
-            // console.error('[hls_parser] Manifest load failed:', err);
+            console.error('[hls_parser] Manifest load failed:', err);
             dispatchStatusUpdate(`Error loading manifest: ${err.message}`);
             // Update the initial UI entry to show the error
             document.dispatchEvent(new CustomEvent('hlsUpdateSegmentType', {
@@ -93,7 +93,7 @@ function initHlsParser(url) {
 
 // ---- Playlist Fetch ----
 async function fetchManifest(url) {
-    // console.log('[hls_parser] Fetching manifest:', url);
+    console.log('[hls_parser] Fetching manifest:', url);
     let response = null;
     try {
         const response = await fetch(url, {
@@ -110,7 +110,7 @@ async function fetchManifest(url) {
 
         state.lastHttpStatus = response.status; // Store the status code immediately
 
-        // console.log(`[hls_parser] Response for ${getShortUrl(url)}: ${response.status} ${response.statusText}`);
+        console.log(`[hls_parser] Response for ${getShortUrl(url)}: ${response.status} ${response.statusText}`);
         if (!response.ok) {
             throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
         }
@@ -124,9 +124,9 @@ async function fetchManifest(url) {
 
         if (!response) {
             state.lastHttpStatus = null; // Indicate fetch failure, not an HTTP status
-            // console.error(`[hls_parser] Network or fetch error for ${url}:`, error);
+            console.error(`[hls_parser] Network or fetch error for ${url}:`, error);
         } else {
-            // console.error(`[hls_parser] Fetch error for ${url}:`, error);
+            console.error(`[hls_parser] Fetch error for ${url}:`, error);
         }
         throw error; // Re-throw to be caught by caller
     }
@@ -143,7 +143,7 @@ function parseMasterPlaylist(content, baseUrl) {
     dispatchStatusUpdate('Parsing master playlist...');
 
     const variants = extractVariantStreams(content);
-    // console.log(`[hls_parser] Found ${variants.length} variant streams`);
+    console.log(`[hls_parser] Found ${variants.length} variant streams`);
 
     // Dispatch master playlist info (could be used for variant switching later)
     dispatchPlaylistParsed('master', { url: baseUrl, content, variants });
@@ -200,7 +200,7 @@ function parseMasterPlaylist(content, baseUrl) {
             dispatchPlaylistParsed('media', { id, url: mediaUrl, content: mediaContent });
         })
         .catch(err => {
-            // console.error(`[hls_parser] Media playlist load failed for ${mediaUrl}:`, err);
+            console.error(`[hls_parser] Media playlist load failed for ${mediaUrl}:`, err);
             dispatchStatusUpdate(`Error loading media playlist: ${err.message}`);
             // Update UI entry for this media playlist to show error
             document.dispatchEvent(new CustomEvent('hlsUpdateSegmentType', {
@@ -290,7 +290,7 @@ function parseMediaPlaylist(content, baseUrl, playlistId) {
 
         // Add this logging for SCTE-related lines
         if (line.includes('SCTE') || line.includes('CUE')) {
-            // console.log('[hls_parser] Potential SCTE line detected:', line);
+            console.log('[hls_parser] Potential SCTE line detected:', line);
         }
 
         if (window.SCTEDispatcher) {
@@ -349,7 +349,7 @@ function parseMediaPlaylist(content, baseUrl, playlistId) {
             currentSegment?.tags.push(line);
 
         } else if (line === '#EXT-X-DISCONTINUITY') {
-            // console.log('[hls_parser] Found exact #EXT-X-DISCONTINUITY tag.');
+            console.log('[hls_parser] Found exact #EXT-X-DISCONTINUITY tag.');
             discontinuitySequence++; // Increment discontinuity counter
             if (currentSegment) {
                 currentSegment.discontinuity = true;
@@ -376,7 +376,7 @@ function parseMediaPlaylist(content, baseUrl, playlistId) {
             state.isLive = false; // Explicit end found
             clearInterval(state.playlistRefreshInterval);
             state.playlistRefreshInterval = null;
-            // console.log('[hls_parser] Reached ENDLIST.');
+            console.log('[hls_parser] Reached ENDLIST.');
             dispatchStatusUpdate("VOD stream finished loading.");
 
         } else if (currentSegment && !line.startsWith('#')) {
@@ -399,7 +399,7 @@ function parseMediaPlaylist(content, baseUrl, playlistId) {
 
             // ---> DISPATCH DISCONTINUITY EVENT IF SEGMENT HAS FLAG <---
             if (currentSegment.discontinuity) {
-                // console.log(`[hls_parser] Dispatching discontinuity for segment: ${currentSegment.id}`);
+                console.log(`[hls_parser] Dispatching discontinuity for segment: ${currentSegment.id}`);
                 document.dispatchEvent(new CustomEvent('hlsDiscontinuityDetected', {
                     detail: {
                         segment: currentSegment // Pass the whole segment object
@@ -429,12 +429,12 @@ function parseMediaPlaylist(content, baseUrl, playlistId) {
 
         // Log how many *new* segments were actually added after filtering
         if (trulyNewSegments.length > 0) {
-            // console.log(`[hls_parser] Added ${trulyNewSegments.length} new segments to playlist ${playlistId}`);
+            console.log(`[hls_parser] Added ${trulyNewSegments.length} new segments to playlist ${playlistId}`);
         }
 
     } else {
         // Should not happen if playlist was added correctly before parsing
-        // console.warn(`[hls_parser] Playlist ID ${playlistId} not found in state when adding segments.`);
+        console.warn(`[hls_parser] Playlist ID ${playlistId} not found in state when adding segments.`);
         state.mediaPlaylists[playlistId] = { url: baseUrl, content, segments: newSegments };
     }
 
@@ -451,20 +451,20 @@ function startPlaylistRefresh(url, playlistId) {
     if (state.playlistRefreshInterval) {
         clearInterval(state.playlistRefreshInterval);
         state.playlistRefreshInterval = null;
-        // console.log('[hls_parser] Cleared existing refresh interval.');
+        console.log('[hls_parser] Cleared existing refresh interval.');
     }
 
     // Determine refresh interval (use target duration if available, else default)
     // HLS spec suggests half the target duration, but let's be slightly less aggressive
     const refreshDelay = state.targetDuration ? Math.max(1000, state.targetDuration * 1000 * 0.7) : state.updateInterval;
-    // console.log(`[hls_parser] Starting playlist refresh for ${getShortUrl(url)} every ${refreshDelay}ms (Playlist ID: ${playlistId})`);
+    console.log(`[hls_parser] Starting playlist refresh for ${getShortUrl(url)} every ${refreshDelay}ms (Playlist ID: ${playlistId})`);
 
 
     state.playlistRefreshInterval = setInterval(async () => {
         if (!state.isLive) { // Stop refreshing if ENDLIST was encountered
             clearInterval(state.playlistRefreshInterval);
             state.playlistRefreshInterval = null;
-            // console.log('[hls_parser] Stopping refresh interval as stream is no longer live.');
+            console.log('[hls_parser] Stopping refresh interval as stream is no longer live.');
             return;
         }
         try {
@@ -472,18 +472,18 @@ function startPlaylistRefresh(url, playlistId) {
             const currentPlaylist = state.mediaPlaylists[playlistId];
 
             if (currentPlaylist && currentPlaylist.content !== latestContent) {
-                // console.log(`[hls_parser] Playlist ${playlistId} updated. Reparsing.`);
+                console.log(`[hls_parser] Playlist ${playlistId} updated. Reparsing.`);
                 currentPlaylist.content = latestContent; // Update content in state
                 parseMediaPlaylist(latestContent, url, playlistId); // Reparse
                 dispatchPlaylistParsed('media', { id: playlistId, url, content: latestContent }); // Notify UI of update
             } else if (!currentPlaylist) {
-                // console.warn(`[hls_parser] Playlist ${playlistId} not found during refresh cycle.`);
+                console.warn(`[hls_parser] Playlist ${playlistId} not found during refresh cycle.`);
                 clearInterval(state.playlistRefreshInterval); // Stop if state is inconsistent
             } else {
-                // console.log(`[hls_parser] Playlist ${playlistId} unchanged.`);
+                console.log(`[hls_parser] Playlist ${playlistId} unchanged.`);
             }
         } catch (err) {
-            // console.error(`[hls_parser] Error refreshing playlist ${playlistId}:`, err);
+            console.error(`[hls_parser] Error refreshing playlist ${playlistId}:`, err);
             dispatchStatusUpdate(`Error refreshing playlist: ${err.message}`);
             // Optional: Implement retry logic or stop refreshing after too many errors
             // clearInterval(state.playlistRefreshInterval);
@@ -505,7 +505,7 @@ function resolveUrl(relativeUrl, baseUrl) {
         // Use URL constructor for robust resolution
         return new URL(relativeUrl, baseUrl).href;
     } catch (e) {
-        // console.warn(`[hls_parser] URL resolution failed for "${relativeUrl}" with base "${baseUrl}". Falling back. Error: ${e}`);
+        console.warn(`[hls_parser] URL resolution failed for "${relativeUrl}" with base "${baseUrl}". Falling back. Error: ${e}`);
         // Fallback for simpler cases (less reliable)
         const base = new URL(baseUrl);
         if (relativeUrl.startsWith('/')) {

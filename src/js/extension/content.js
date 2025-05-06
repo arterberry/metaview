@@ -43,21 +43,21 @@ if (!window.location.pathname.includes('player.html')) {
 // In content.js - Update the message handler
 chrome.runtime.onMessage.addListener((message) => {
     if (message.action === "openPlayer" && !window.location.pathname.includes('player.html')) {
-        // console.log("[content.js] Launching player.html with HLS URL");
+        console.log("[content.js] Launching player.html with HLS URL");
 
         // Ensure we're passing the complete URL with all parameters
         // Use encodeURIComponent to preserve all special characters in the URL
         const encodedUrl = encodeURIComponent(message.hlsUrl);
         
-        // console.log('[content.js] Launching player.html with encoded src:');
-        // console.log('Raw URL:', message.hlsUrl);
-        // console.log('Encoded URL:', encodedUrl);
+        console.log('[content.js] Launching player.html with encoded src:');
+        console.log('Raw URL:', message.hlsUrl);
+        console.log('Encoded URL:', encodedUrl);
         
         // Build the full player URL
         const fullUrl = chrome.runtime.getURL("player.html") + `?src=${encodedUrl}`;
         
-        // console.log('Navigating to:', fullUrl);
-        // console.log('Full URL length:', fullUrl.length);
+        console.log('Navigating to:', fullUrl);
+        console.log('Full URL length:', fullUrl.length);
 
         window.location.href = fullUrl;
     }

@@ -1,8 +1,8 @@
 {
     "manifest_version": 3,
-    "name": "VIDINFRA HLS MetaPlayer",
+    "name": "VIDINFRA MetaView Player",
     "version": "1.1",
-    "description": "Plays .m3u8 URLs directly via content script and provides a side panel.",
+    "description": "Play .m3u8 URLs directly in Chrome and gather playback metrics.",
     "icons": {
         "16": "images/icon16.png",
         "48": "images/icon48.png",
@@ -23,7 +23,7 @@
         "service_worker": "js/extension/background.js"
     },
     "action": {
-        "default_title": "Open VIDINFRA MetaPlayer Panel",
+        "default_title": "Open VIDINFRA MetaView Player Panel",
         "default_icon": {
             "16": "images/icon16.png",
             "48": "images/icon48.png",

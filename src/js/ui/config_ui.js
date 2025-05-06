@@ -56,7 +56,7 @@
             const provider = document.getElementById('providerSelect').value;
             chrome.storage.local.set({ [STORAGE_KEY]: key, [STORAGE_PROVIDER]: provider }, () => {
                 // Optional: give feedback
-                // console.log('AI key & provider saved');
+                console.log('AI key & provider saved');
             });
         });
 
@@ -64,7 +64,7 @@
         document.getElementById('clearKeyBtn').addEventListener('click', () => {
             chrome.storage.local.remove(STORAGE_KEY, () => {
                 document.getElementById('apiKeyInput').value = '';
-                // console.log('AI key cleared');
+                console.log('AI key cleared');
             });
         });
     });

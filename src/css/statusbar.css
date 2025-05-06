@@ -2,42 +2,58 @@
 
 /* White base text */
 .status-bar {
-    color: #969696;
-  }
-  
-  /* Section blocks within the bar */
-  .status-bar .statusbar__section {
-    display: flex;
-    align-items: center;
-    font-size: 12px;
-    line-height: 1;
-  }
-  
-  /* Divider between sections */
-  .status-bar .statusbar__divider {
-    width: 1px;
-    height: 14px;
-    background-color: #555;
-    margin: 0 8px;
-  }
-  
-  /* Response code styling (weight only here) */
-  .status-bar .statusbar__code {
-    font-weight: bold;
-  }
-  
-  /* Correct selector for success codes */
-  .status-bar .statusbar__code--success {
-    color: #95e195;
-  }
-  
-  /* Selector for error codes stays the same */
-  .status-bar .statusbar__code--error {
-    color: #ebb5b5;
-  }
-  
-  /* If you ever need the CDN text to always be white, you can explicitly force it: */
-  .status-bar .statusbar__cdn {
-    color: #ffffff;
-  }
-  
+	color: #969696;
+}
+
+/* Section blocks within the bar */
+.status-bar .statusbar__section {
+	display: flex;
+	align-items: center;
+	font-size: 12px;
+	line-height: 1;
+}
+
+/* Divider between sections */
+.status-bar .statusbar__divider {
+	width: 1px;
+	height: 14px;
+	background-color: #555;
+	margin: 0 8px;
+}
+
+/* Response code styling (weight only here) */
+.status-bar .statusbar__code {
+	font-weight: bold;
+}
+
+/* Correct selector for success codes */
+.status-bar .statusbar__code--success {
+	color: #95e195;
+}
+
+/* Selector for error codes stays the same */
+.status-bar .statusbar__code--error {
+	color: #ebb5b5;
+}
+
+/* If you ever need the CDN text to always be white, you can explicitly force it: */
+.status-bar .statusbar__cdn {
+	color: #ffffff;
+}
+
+/* Buffer message base styling */
+.status-bar .statusbar__buffer {
+	font-size: 12px;
+	line-height: 1;
+}
+
+/* Normal (no buffering errors): inherit the default grey */
+.status-bar .statusbar__buffer--normal {
+	color: inherit;
+}
+
+/* Error (buffer stalled): red, bold */
+.status-bar .statusbar__buffer--error {
+	color: #ebb5b5;
+	font-weight: bold;
+}

@@ -7,6 +7,12 @@ console.log('[metrics_ui] Initializing Metrics UI…');
 
     // console.log('[metrics_ui] IIFE running');
 
+    const bufferStalledState = {
+        start: null,
+        end:   null,
+        duration: null
+    };
+
     // Metrics state
     const qoeData = {
         startTime: null,
@@ -178,6 +184,11 @@ console.log('[metrics_ui] Initializing Metrics UI…');
                     qoeData.lastRebufferStart = null;
                     updateQoEDisplay();
                 }
+                // If we previously saw a bufferStalledError, mark its end now
+                if (bufferStalledState.start && !bufferStalledState.end) {
+                    bufferStalledState.end = new Date();
+                    bufferStalledState.duration = (bufferStalledState.end - bufferStalledState.start) / 1000;
+                }                
             });
             video.addEventListener('ratechange', () => {
                 qoeData.playbackRate = video.playbackRate;
@@ -445,6 +456,27 @@ console.log('[metrics_ui] Initializing Metrics UI…');
 
             // --- Consolidated Error Handling ---                        
             const genericErrorHandler = (_, data) => {
+
+                // Detect Buffer‐Stalled start
+                if (data.details === Hls.ErrorDetails.BUFFER_STALLED_ERROR) {
+                    bufferStalledState.start = new Date();
+                    bufferStalledState.end = null;
+                }
+
+                // Detect Buffer‐Stalled start (and fire our custom “nudge” event)
+                if (data.details === Hls.ErrorDetails.BUFFER_STALLED_ERROR) {
+                    bufferStalledState.start = new Date();
+                    bufferStalledState.end = null;
+
+                    // 1) Log it in the QoE event history
+                    addEvent('Buffer Nudge on Stall', 'rebuffer');
+
+                    // 2) Dispatch a DOM event so other modules (e.g. statusbar_manager) can listen
+                    document.dispatchEvent(new CustomEvent('bufferNudgeOnStall', {
+                        detail: { time: bufferStalledState.start }
+                    }));
+                }                
+
                 let errorMessage = `HLS Error: ${data.type || 'Unknown Type'} - ${data.details || 'No Details'}`;
                 if (data.fatal) errorMessage += " (Fatal)";
                 if (data.reason) errorMessage += ` Reason: ${data.reason}`;
@@ -960,7 +992,21 @@ console.log('[metrics_ui] Initializing Metrics UI…');
          */
         getEventHistory: function () {
             return qoeData.eventHistory.slice(); // shallow copy to prevent external mutation
-        }        
+        },
+        
+        /**
+         * Returns the current bufferStalled state.
+         * @returns {Object} - Object containing bufferStalled state.
+         */
+        playbackBufferCheck: function() {
+            if (bufferStalledState.start && !bufferStalledState.end) {
+                return ` bufferStalledError: Started: ${bufferStalledState.start.toISOString()}`;
+            } else if (bufferStalledState.start && bufferStalledState.end) {
+                return ` bufferStalledError: Ended: ${bufferStalledState.end.toISOString()}: after ${bufferStalledState.duration.toFixed(2)}s`;
+            } else {
+                return ` No Buffering Errors.`;
+            }
+        }
     };
 
     // Assign the temp variable and then Freeze

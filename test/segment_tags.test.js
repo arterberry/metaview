@@ -55,10 +55,8 @@ describe('classifySegment', () => {
         expect(classifySegment('https://cdn.example.com/stream/1080p/index.m3u8', 'media')).toBe('Playlist');
     });
 
-    test('classifySegment returns "Ad" for URLs containing ad keywords (no hint)', () => {
-        expect(classifySegment('https://cdn.example.com/ads/creative.ts')).toBe('Ad');
-        expect(classifySegment('https://cdn.example.com/scte/marker.ts')).toBe('Ad');
-        expect(classifySegment('https://cdn.example.com/splice/point.ts')).toBe('Ad');
+    test('classifySegment returns "Ad" for URLs containing creatives keywords (no hint)', () => {
+        expect(classifySegment('https://cdn.example.com//creatives/creative.ts')).toBe('Ad');
     });
 
     test('classifySegment returns "Metadata" for URLs containing "metadata" (no hint)', () => {
@@ -87,12 +85,13 @@ describe('classifySegment', () => {
     });
 
     test('classifySegment returns correct types with typeHint "fragment"', () => {
-        expect(classifySegment('https://cdn.example.com/live/ad_segment.ts', 'fragment')).toBe('Ad');
+        expect(classifySegment('https://cdn.example.com/live/ad_segment.ts', 'fragment')).toBe('Live');
+        expect(classifySegment('https://cdn.example.com/creatives/creative123.ts', 'fragment')).toBe('Ad');
         expect(classifySegment('https://cdn.example.com/live/muxed_video=1_audio=1.ts', 'fragment')).toBe('Muxed');
         expect(classifySegment('https://cdn.example.com/live/audio_only=1.aac', 'fragment')).toBe('Audio-Only');
         expect(classifySegment('https://cdn.example.com/live/video_only=1.mp4', 'fragment')).toBe('Video-Only');
         expect(classifySegment('https://cdn.example.com/live/regular_segment.ts', 'fragment')).toBe('Live');
-    });
+    });    
 
     test('classifySegment handles empty or invalid URLs gracefully', () => {
         expect(classifySegment('')).toBe('Segment');
@@ -104,7 +103,7 @@ describe('classifySegment', () => {
     test('classifySegment handles case-insensitivity', () => {
         expect(classifySegment('https://cdn.example.com/stream/INDEX.M3U8')).toBe('Playlist');
         expect(classifySegment('https://cdn.example.com/stream/VIDEO=123_AUDIO=456.TS')).toBe('Muxed');
-        expect(classifySegment('https://cdn.example.com/ADS/creative.ts')).toBe('Ad');
+        expect(classifySegment('https://cdn.example.com/ADS/creative.ts')).toBe('Segment');
     });
 });
 

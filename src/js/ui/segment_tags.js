@@ -26,42 +26,51 @@ function observeSegmentList() {
     }
 }
 
-
 function classifySegment(rawUrl = '', typeHint = null) {
-    // --- Existing classification logic ---
-    let pathname = '';
-    let url = rawUrl.toLowerCase();
-    try { pathname = new URL(rawUrl).pathname; } catch { pathname = rawUrl.split('?')[0]; }
-    const isAudio = pathname.includes('audio=') || pathname.includes('audio_eng=');
-    const isVideo = pathname.includes('video=') || pathname.includes('video_eng=');
-    const adMatch = /\b(ad|scte|splice)\b/.test(pathname);
-
-    // --- Use typeHint if available ---
-    if (typeHint === 'master' || typeHint === 'media' || pathname.endsWith('.m3u8')) return 'Playlist';
-    if (typeHint === 'fragment') {
-         // If we know it's a live fragment, prioritize that unless it's clearly an ad/muxed etc.
-         if (adMatch) return 'Ad';
-         if (isAudio && isVideo) return 'Muxed';
-         if (isAudio) return 'Audio-Only';
-         if (isVideo) return 'Video-Only';
-         return 'Live'; // Default for fragment if not otherwise classified
+    if (!rawUrl || typeof rawUrl !== 'string') {
+        console.warn('[classifySegment] Received invalid input. Returning "Segment".');
+        return 'Segment';
     }
-    // --- Fallback to original logic if no/other typeHint ---
-    if (pathname.includes('metadata')) return 'Metadata';
-    if (adMatch) return 'Ad';
-    if (isAudio && isVideo) return 'Muxed';
-    if (isAudio) return 'Audio-Only';
-    if (isVideo) return 'Video-Only';
-    // Removed endsWith checks for ts/mp4 as typeHint is better
-    // if (pathname.endsWith('.ts') || pathname.endsWith('.m4s') || pathname.endsWith('.mp4')) return 'Live';
 
-    // Default fallback
+    let pathname = '';
+    try {
+        pathname = new URL(rawUrl).pathname.toLowerCase();
+    } catch (e) {
+        console.warn(`[classifySegment] URL parse failed (“${rawUrl}”). Falling back to bare path.`);
+        pathname = rawUrl.split('?')[0].toLowerCase();
+    }
+
+    const isAudio = pathname.includes('audio=') || pathname.includes('audio_eng=') || pathname.includes('audio_only=');
+    const isVideo = pathname.includes('video=') || pathname.includes('video_eng=') || pathname.includes('video_only=');
+
+    // ←— UPDATED: detect SCTE/splice, explicit “/ad/” or Fox’s “/creatives” segments as Ads
+    const adMatch =
+         /\b(?:scte|splice)\b/.test(pathname)
+      || pathname.includes('/ad/')
+      || pathname.includes('/creatives');
+
+    // Use typeHint where we can
+    if (typeHint === 'master' || typeHint === 'media' || pathname.endsWith('.m3u8')) {
+        return 'Playlist';
+    }
+    if (typeHint === 'fragment') {
+        if (adMatch)             return 'Ad';
+        if (isAudio && isVideo)  return 'Muxed';
+        if (isAudio)             return 'Audio-Only';
+        if (isVideo)             return 'Video-Only';
+        return 'Live';
+    }
+
+    // Fallback
+    if (pathname.includes('metadata'))   return 'Metadata';
+    if (adMatch)                         return 'Ad';
+    if (isAudio && isVideo)              return 'Muxed';
+    if (isAudio)                         return 'Audio-Only';
+    if (isVideo)                         return 'Video-Only';
+
     return 'Segment';
 }
-// Make globally available if not already using modules
 window.classifySegment = classifySegment;
-
-
 
 function buildBadge(label) {
     if (!label) return null;
@@ -82,4 +91,8 @@ function listenForExpirationEvents() {
             el.appendChild(badge);
         }
     });
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {  buildBadge, classifySegment, listenForExpirationEvents }; // <-- Export the function
 }

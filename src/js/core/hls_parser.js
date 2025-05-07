@@ -41,43 +41,49 @@ function dispatchPlaylistParsed(type, details) { // type = 'master' or 'media'
 
 
 // ---- Parser Initialization ----
-function initHlsParser(url) {
-    if (!url) {
+function initHlsParser(initialUrl) { // Renamed 'url' to 'initialUrl'
+    if (!initialUrl) {
         dispatchStatusUpdate("Error: No HLS URL provided.");
         console.error("[hls_parser] Initialization failed: No URL.");
         return;
     }
-    state.masterUrl = url;
-    dispatchStatusUpdate(`Loading manifest: ${getShortUrl(url)}`);
+    state.masterUrl = initialUrl;
+    dispatchStatusUpdate(`Loading manifest: ${getShortUrl(initialUrl)}`);
 
     // Add the initial Master/Media playlist entry to the UI immediately
     // We guess the type first, and refine after fetching
     const initialEntry = {
         id: 'initial_playlist',
-        url: url,
+        url: initialUrl,
         title: 'Loading Playlist...',
         type: 'unknown' // Will be updated later
     };
     dispatchSegmentAdded(initialEntry); // Send to UI
 
 
-    fetchManifest(url)
-        .then(content => {
+    fetchManifest(initialUrl) // Fetch the initial URL
+        .then(fetchResult => { // fetchResult is { content, finalUrl }
+            const content = fetchResult.content;
+            const finalFetchedUrl = fetchResult.finalUrl; // This URL might have the token in the path due to redirect
+
             const isMaster = isMasterPlaylist(content);
             const playlistType = isMaster ? 'master' : 'media';
-
-            // Update the initial UI entry with the correct type
+            // ...
             document.dispatchEvent(new CustomEvent('hlsUpdateSegmentType', {
-                detail: { url: url, type: playlistType, title: isMaster ? 'Master Playlist' : 'Media Playlist' }
+                // Use finalFetchedUrl for UI updates if it's more representative, or initialUrl if preferred for the "entry point" display
+                detail: {
+                    url: initialUrl, // Or finalFetchedUrl, depending on what manifest_ui uses to match
+                    type: playlistType,
+                    title: isMaster ? 'Master Playlist' : 'Media Playlist'
+                }
             }));
 
-
             if (isMaster) {
-                console.log('[hls_parser] Detected master playlist');
-                parseMasterPlaylist(content, url);
+                console.log('[hls_parser] Detected master playlist. Initial URL:', getShortUrl(initialUrl), 'Final Fetched URL:', getShortUrl(finalFetchedUrl));
+                parseMasterPlaylist(content, finalFetchedUrl); // <<<< PASS THE FINAL FETCHED URL HERE
             } else {
-                console.log('[hls_parser] Detected media playlist');
-                handleDirectMediaPlaylist(content, url);
+                console.log('[hls_parser] Detected media playlist. Initial URL:', getShortUrl(initialUrl), 'Final Fetched URL:', getShortUrl(finalFetchedUrl));
+                handleDirectMediaPlaylist(content, finalFetchedUrl); // <<<< PASS THE FINAL FETCHED URL HERE
             }
             state.initialLoadComplete = true;
         })
@@ -86,49 +92,54 @@ function initHlsParser(url) {
             dispatchStatusUpdate(`Error loading manifest: ${err.message}`);
             // Update the initial UI entry to show the error
             document.dispatchEvent(new CustomEvent('hlsUpdateSegmentType', {
-                detail: { url: url, type: 'error', title: 'Load Failed' }
+                detail: {
+                    url: initialUrl, // Match by the original URL
+                    type: 'error',   // Set type to 'error'
+                    title: 'Load Failed'
+                }
             }));
         });
 }
 
 // ---- Playlist Fetch ----
-async function fetchManifest(url) {
-    console.log('[hls_parser] Fetching manifest:', url);
+async function fetchManifest(urlToFetch) { // Renamed 'url' to 'urlToFetch' to avoid confusion with response.url
+    console.log('[hls_parser] Fetching manifest:', getShortUrl(urlToFetch));
     let response = null;
     try {
-        const response = await fetch(url, {
+        response = await fetch(urlToFetch, {
             method: 'GET',
             headers: {
                 'Cache-Control': 'no-cache',
                 'Pragma': 'no-cache',
-                'Accept': 'application/vnd.apple.mpegurl, application/x-mpegurl, */*', // Be explicit
+                'Accept': 'application/vnd.apple.mpegurl, application/x-mpegurl, */*',
             },
             credentials: 'omit',
             mode: 'cors',
-            cache: 'no-store' // Stronger cache prevention
+            cache: 'no-store'
         });
 
-        state.lastHttpStatus = response.status; // Store the status code immediately
+        state.lastHttpStatus = response.status;
+        const finalUrlAfterRedirects = response.url; // This is the key URL
 
-        console.log(`[hls_parser] Response for ${getShortUrl(url)}: ${response.status} ${response.statusText}`);
+        console.log(`[hls_parser] Request to ${getShortUrl(urlToFetch)}, Final URL after redirects: ${getShortUrl(finalUrlAfterRedirects)}, Status: ${response.status} ${response.statusText}`);
+
         if (!response.ok) {
-            throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
+            throw new Error(`HTTP error ${response.status}: ${response.statusText} for ${finalUrlAfterRedirects}`);
         }
         const text = await response.text();
         if (!text || !text.includes('#EXTM3U')) {
-            throw new Error('Invalid M3U8 content received');
+            throw new Error(`Invalid M3U8 content received from ${finalUrlAfterRedirects}`);
         }
-        return text;
-
+        return { content: text, finalUrl: finalUrlAfterRedirects }; // Return content AND the final URL
     } catch (error) {
-
         if (!response) {
-            state.lastHttpStatus = null; // Indicate fetch failure, not an HTTP status
-            console.error(`[hls_parser] Network or fetch error for ${url}:`, error);
+            state.lastHttpStatus = null;
+            console.error(`[hls_parser] Network or fetch error for ${getShortUrl(urlToFetch)}:`, error);
         } else {
-            console.error(`[hls_parser] Fetch error for ${url}:`, error);
+            // Log error with the URL that was attempted or resulted from redirect
+            console.error(`[hls_parser] Fetch error for ${getShortUrl(response.url || urlToFetch)}:`, error);
         }
-        throw error; // Re-throw to be caught by caller
+        throw error;
     }
 }
 
@@ -138,35 +149,91 @@ function isMasterPlaylist(content) {
 }
 
 // ---- Master Playlist Parsing ----
-function parseMasterPlaylist(content, baseUrl) {
-    state.masterManifest = content;
+// js/core/hls_parser.js
+
+// ---- Master Playlist Parsing ----
+function parseMasterPlaylist(masterContent, fetchedMasterUrl) {
+    state.masterManifest = masterContent;
     dispatchStatusUpdate('Parsing master playlist...');
+    console.log(`[hls_parser] Parsing master manifest fetched from: ${getShortUrl(fetchedMasterUrl)}`);
 
-    const variants = extractVariantStreams(content);
-    console.log(`[hls_parser] Found ${variants.length} variant streams`);
+    const variants = extractVariantStreams(masterContent);
+    console.log(`[hls_parser] Found ${variants.length} variant streams.`);
+    dispatchPlaylistParsed('master', { url: fetchedMasterUrl, content: masterContent, variants });
 
-    // Dispatch master playlist info (could be used for variant switching later)
-    dispatchPlaylistParsed('master', { url: baseUrl, content, variants });
+    if (variants.length === 0) { /* ... */ return; }
 
-    // --- Auto-select and load the first (often highest bitrate) variant ---
-    // TODO: Add logic to select based on preference or bandwidth estimation later
-    if (variants.length === 0) {
-        dispatchStatusUpdate('Master playlist found, but no variant streams detected.');
-        return;
+    const selectedVariant = variants[0];
+    const mediaPlaylistUriFromMaster = selectedVariant.uri;
+
+    // 1. Primary Resolution against the URL master content was fetched from.
+    let finalMediaPlaylistUrl = resolveUrl(mediaPlaylistUriFromMaster, fetchedMasterUrl);
+    console.log(`[hls_parser] Initial resolved media playlist URL (from fetchedMasterUrl): ${getShortUrl(finalMediaPlaylistUrl)}`);
+
+    // Check if fetchedMasterUrl indicates a path-based token was already applied by CDN redirect
+    const fetchedMasterUrlObj = new URL(fetchedMasterUrl);
+    const tokenPathRegex = /(\/[0-9a-f]{10,}_[0-9a-f]{10,}\/\*\~\/)/i; // Regex for your /TOKEN_PATH_COMPONENT/
+    const masterPathHasTokenComponent = tokenPathRegex.test(fetchedMasterUrlObj.pathname);
+
+    if (masterPathHasTokenComponent) {
+        console.log(`[hls_parser] Detected path-based token in fetchedMasterUrl's path (${fetchedMasterUrlObj.pathname}). Assuming path token is sufficient.`);
+        // If finalMediaPlaylistUrl (after simple resolution) still has query params AND this CDN doesn't want them with path tokens, clear them.
+        // This is specific to Fastly behavior you described where path-tokenized URLs have NO query params.
+        const tempUrlObj = new URL(finalMediaPlaylistUrl);
+        if (tempUrlObj.search) { // If there are any query params
+            // Check if these query params are from the original master URI or if they were part of mediaPlaylistUriFromMaster
+            if (!mediaPlaylistUriFromMaster.includes('?')) { // If media URI itself didn't have query params
+                console.log(`[hls_parser] Clearing query parameters from media playlist URL as path token is present and media URI was clean: ${getShortUrl(finalMediaPlaylistUrl)}`);
+                tempUrlObj.search = ''; // Clear query string
+                finalMediaPlaylistUrl = tempUrlObj.toString();
+            } else {
+                console.log(`[hls_parser] Media URI from master ('${mediaPlaylistUriFromMaster}') had its own query params. Preserving them alongside path token.`);
+            }
+        }
+    } else {
+        // 2. Secondary Step: Query String Token Propagation (if no path-based token detected in fetchedMasterUrl's path)
+        console.log(`[hls_parser] No clear path-based token in fetchedMasterUrl. Attempting query string token propagation.`);
+        try {
+            const originalEntryPointUrlObj = new URL(state.masterUrl);
+            const currentMediaUrlObj = new URL(finalMediaPlaylistUrl);
+
+            if (originalEntryPointUrlObj.search &&
+                originalEntryPointUrlObj.hostname === currentMediaUrlObj.hostname) {
+                // ... (the rest of the query string propagation logic from the previous refactor) ...
+                const currentMediaParams = new URLSearchParams(currentMediaUrlObj.search);
+                let needsQueryParamTokens = true;
+                const commonTokenParams = ['hdnts', 'token', 'sig', 'signature', 'auth', 'exp', 'acl', 'hmac', 'Policy', 'Key-Pair-Id'];
+                for (const tokenParam of commonTokenParams) {
+                    if (currentMediaParams.has(tokenParam)) {
+                        needsQueryParamTokens = false;
+                        console.log(`[hls_parser] Media URL ${getShortUrl(finalMediaPlaylistUrl)} already has query token ('${tokenParam}'). Skipping master query param append.`);
+                        break;
+                    }
+                }
+
+                if (needsQueryParamTokens) {
+                    if (mediaPlaylistUriFromMaster.includes('?') || currentMediaUrlObj.search) {
+                        console.warn(`[hls_parser] Media URI/URL already had query params. They will be replaced by original master's query params: ${originalEntryPointUrlObj.search}`);
+                    }
+                    const tempUrl = new URL(finalMediaPlaylistUrl);
+                    tempUrl.search = originalEntryPointUrlObj.search;
+                    finalMediaPlaylistUrl = tempUrl.toString();
+                    console.log(`[hls_parser] Applied query tokens from original entry point. New media URL: ${getShortUrl(finalMediaPlaylistUrl)}`);
+                }
+            }
+        } catch (e) {
+            console.warn('[hls_parser] Error during query string token propagation:', e);
+        }
     }
 
-    // Let's try picking the first one listed (often reasonable default)
-    // Or could sort by bandwidth: variants.sort((a, b) => (b.bandwidth || 0) - (a.bandwidth || 0));
-    const selectedVariant = variants[0];
-    const mediaUrl = resolveUrl(selectedVariant.uri, baseUrl);
-    const id = `variant_${selectedVariant.bandwidth || 0}_${selectedVariant.resolution || 'unknown'}`; // Unique ID
+    const mediaPlaylistId = `variant_${selectedVariant.bandwidth || 0}_${selectedVariant.resolution || 'unknown'}`;
+    // ... (rest of the function remains the same, using finalMediaPlaylistUrl) ...
+    // e.g., fetchManifest(finalMediaPlaylistUrl).then(fetchResult => { ... use fetchResult.finalUrl ... })
+    dispatchStatusUpdate(`Loading media playlist: ${getShortUrl(finalMediaPlaylistUrl)}`);
 
-    dispatchStatusUpdate(`Loading media playlist: ${getShortUrl(mediaUrl)}`);
-
-    // Add media playlist entry to UI
     dispatchSegmentAdded({
-        id: `media_${id}`, // Unique ID for this media playlist entry
-        url: mediaUrl,
+        id: `media_${mediaPlaylistId}`,
+        url: finalMediaPlaylistUrl,
         title: `Media Playlist (${selectedVariant.resolution || 'Variant'})`,
         type: 'media',
         bandwidth: selectedVariant.bandwidth,
@@ -174,37 +241,46 @@ function parseMasterPlaylist(content, baseUrl) {
         codecs: selectedVariant.codecs
     });
 
+    // Fetch the media playlist using the final constructed URL
+    fetchManifest(finalMediaPlaylistUrl)
+        .then(fetchResult => { // fetchResult is { content, finalUrl }
+            const mediaContent = fetchResult.content;
+            const actualFetchedMediaUrl = fetchResult.finalUrl;
 
-    fetchManifest(mediaUrl)
-        .then(mediaContent => {
-            state.mediaPlaylists[id] = {
-                url: mediaUrl,
+            if (finalMediaPlaylistUrl !== actualFetchedMediaUrl && !actualFetchedMediaUrl.startsWith('blob:')) { // Ignore blob URL differences
+                console.warn(`[hls_parser] Media playlist URL used for fetch (${getShortUrl(finalMediaPlaylistUrl)}) differed from final URL after redirects (${getShortUrl(actualFetchedMediaUrl)}). Using final URL for state.`);
+            }
+            // Prefer actualFetchedMediaUrl if it's not a blob URL, otherwise stick to finalMediaPlaylistUrl
+            const urlForStateAndParsing = actualFetchedMediaUrl.startsWith('blob:') ? finalMediaPlaylistUrl : actualFetchedMediaUrl;
+
+
+            state.mediaPlaylists[mediaPlaylistId] = {
+                url: urlForStateAndParsing,
                 content: mediaContent,
                 bandwidth: selectedVariant.bandwidth,
                 resolution: selectedVariant.resolution,
                 codecs: selectedVariant.codecs,
-                segments: [] // Segments will be added by parseMediaPlaylist
+                segments: []
             };
-            state.activeMediaPlaylistId = id;
-            parseMediaPlaylist(mediaContent, mediaUrl, id);
+            state.activeMediaPlaylistId = mediaPlaylistId;
 
-            // Check if live AFTER parsing segments
+            parseMediaPlaylist(mediaContent, urlForStateAndParsing, mediaPlaylistId);
+
             if (!mediaContent.includes('#EXT-X-ENDLIST')) {
                 state.isLive = true;
                 dispatchStatusUpdate(`Live stream detected. Refreshing playlist every ${state.updateInterval / 1000}s`);
-                startPlaylistRefresh(mediaUrl, id);
+                startPlaylistRefresh(urlForStateAndParsing, mediaPlaylistId);
             } else {
                 state.isLive = false;
                 dispatchStatusUpdate('VOD stream loaded.');
             }
-            dispatchPlaylistParsed('media', { id, url: mediaUrl, content: mediaContent });
+            dispatchPlaylistParsed('media', { id: mediaPlaylistId, url: urlForStateAndParsing, content: mediaContent });
         })
         .catch(err => {
-            console.error(`[hls_parser] Media playlist load failed for ${mediaUrl}:`, err);
-            dispatchStatusUpdate(`Error loading media playlist: ${err.message}`);
-            // Update UI entry for this media playlist to show error
+            console.error(`[hls_parser] Media playlist load failed for ${getShortUrl(finalMediaPlaylistUrl)}:`, err);
+            dispatchStatusUpdate(`Error loading media playlist: ${err.message} for ${getShortUrl(finalMediaPlaylistUrl)}`);
             document.dispatchEvent(new CustomEvent('hlsUpdateSegmentType', {
-                detail: { url: mediaUrl, type: 'error', title: `Media Load Failed (${selectedVariant.resolution || 'Variant'})` }
+                detail: { url: finalMediaPlaylistUrl, type: 'error', title: `Media Load Failed (${selectedVariant.resolution || 'Variant'})` }
             }));
         });
 }
@@ -283,6 +359,7 @@ function parseMediaPlaylist(content, baseUrl, playlistId) {
     let currentMap = null; // Track current EXT-X-MAP context
     let programDateTime = null; // Track Program Date Time
     let nextSegmentHasDiscontinuity = false;
+    let pendingScteTagData = null;
 
     for (const lineRaw of lines) {
         const line = lineRaw.trim();
@@ -291,11 +368,32 @@ function parseMediaPlaylist(content, baseUrl, playlistId) {
         // Add this logging for SCTE-related lines
         if (line.includes('SCTE') || line.includes('CUE')) {
             console.log('[hls_parser] Potential SCTE line detected:', line);
+            if (window.SCTE35Parser) { // Still need SCTE35Parser for extractFromHLSTags's initial regex
+                const extractionResult = window.SCTE35Parser.extractFromHLSTags(line, true); // Pass a new flag 'extractOnly'
+                if (extractionResult && extractionResult.encoded) {
+                    console.log('[hls_parser] Extracted SCTE-35 tag (parsing deferred):', extractionResult.encoded);
+                    pendingScteTagData = { // Store raw details
+                        line: line,
+                        encoded: extractionResult.encoded,
+                        encodingType: extractionResult.encodingType,
+                        // NO 'parsed' field here yet
+                    };
+                }
+            }
         }
 
+        // Original SCTEDispatcher logic (can keep or remove depending on its actual use)
+        // If SCTEDispatcher does its *own* parsing, this could be redundant/conflicting.
+        // Based on the request, `scte_manager.js` should handle the display.
+        // The new scte35parse.js extracts the data for scte_manager.js.
+        // Let's assume SCTEDispatcher is an old/separate mechanism and focus on the new one.
+        // Removing or commenting out this line to avoid confusion:
+        /*
         if (window.SCTEDispatcher) {
             window.SCTEDispatcher.processTag(line);
-        } // Process SCTE tags if dispatcher is available 
+        } // Process SCTE tags if dispatcher is available
+        */
+        // Process SCTE tags if dispatcher is available 
 
         if (line.startsWith('#EXTINF:')) {
             const durationMatch = line.match(/#EXTINF:([\d.]+)/);
@@ -307,6 +405,9 @@ function parseMediaPlaylist(content, baseUrl, playlistId) {
                 playlistId: playlistId,
                 tags: [], // Store associated tags
                 programDateTime: programDateTime // Associate PDT if available
+                // ---> SCTE TAG DATA WILL BE ATTACHED HERE LATER <---
+                // scteTagData: pendingScteTagData // No, attach when URL is found
+                // ---> END ATTACHMENT NOTE <---
             };
             if (currentKey) currentSegment.encryption = currentKey;
             if (currentMap) currentSegment.map = currentMap; // Associate map info
@@ -333,7 +434,12 @@ function parseMediaPlaylist(content, baseUrl, playlistId) {
             };
             // Apply key to subsequent segments (until next #EXT-X-KEY or METHOD=NONE)
             if (currentSegment) currentSegment.encryption = currentKey; // Apply to current if it exists
-            currentSegment?.tags.push(line);
+            // currentSegment?.tags.push(line);
+            // Add key tag to segment tags array if a segment is pending
+            if (currentSegment) currentSegment.tags.push(lineRaw);
+            // If no segment is pending, this key applies to future segments, store it globally or on playlist state if needed
+            // For now, just applying to current/next segment context seems sufficient based on typical HLS parsing logic.
+
         } else if (line.startsWith('#EXT-X-MAP:')) {
             currentMap = {
                 uri: resolveUrl(line.match(/URI="([^"]+)"/)?.[1], baseUrl),
@@ -341,12 +447,15 @@ function parseMediaPlaylist(content, baseUrl, playlistId) {
             };
             // Apply map to subsequent segments
             if (currentSegment) currentSegment.map = currentMap;
-            currentSegment?.tags.push(line);
+            // currentSegment?.tags.push(line);
+            if (currentSegment) currentSegment.tags.push(lineRaw); // Add map tag to segment tags
+
 
         } else if (line.startsWith('#EXT-X-PROGRAM-DATE-TIME:')) {
             programDateTime = new Date(line.substring('#EXT-X-PROGRAM-DATE-TIME:'.length));
             if (currentSegment) currentSegment.programDateTime = programDateTime; // Apply to current segment if EXTINF came first
-            currentSegment?.tags.push(line);
+            // currentSegment?.tags.push(line);
+            if (currentSegment) currentSegment.tags.push(lineRaw); // Add PDT tag to segment tags
 
         } else if (line === '#EXT-X-DISCONTINUITY') {
             console.log('[hls_parser] Found exact #EXT-X-DISCONTINUITY tag.');
@@ -383,6 +492,15 @@ function parseMediaPlaylist(content, baseUrl, playlistId) {
             // This line is the segment URI
             currentSegment.url = resolveUrl(line, baseUrl);
             currentSegment.id = `${playlistId}_seq${currentSegment.sequence}`; // Use sequence for ID
+            currentSegment.filename = line.split('/').pop().split('?')[0]; // Extract filename
+
+            // ---> ATTACH PENDING SCTE TAG DATA TO THE SEGMENT <---
+            if (pendingScteTagData) {
+                currentSegment.scteTagData = pendingScteTagData;
+                pendingScteTagData = null; // Reset for the next segment
+                console.log(`[hls_parser] Attached SCTE tag data to segment ${currentSegment.id}`);
+            }
+            // ---> END ATTACHMENT <---
 
             // ---> APPLY DISCONTINUITY FLAG IF IT PRECEDED EXTINF <---
             if (nextSegmentHasDiscontinuity) {
@@ -411,7 +529,26 @@ function parseMediaPlaylist(content, baseUrl, playlistId) {
             mediaSequence++;
             currentSegment = null;
             // nextSegmentHasDiscontinuity = false; // Already reset above
+        } else if (!line.startsWith('#') && line.trim()) {
+            // This is a segment URI line WITHOUT a preceding #EXTINF. This is non-standard,
+            // but might occur in malformed manifests or specific edge cases.
+            // In standard HLS, every segment URI must be preceded by EXTINF.
+            // If we encounter this, we technically can't create a segment object with duration, etc.
+            // We'll skip it for now, relying on EXTINF always preceding the URI.
+            console.warn(`[hls_parser] Encountered standalone segment URI without #EXTINF: ${line}`);
+            // Ensure pending SCTE data is cleared as it won't be attached to a valid segment
+            pendingScteTagData = null;
+            nextSegmentHasDiscontinuity = false;
         }
+    }
+
+    // Handle any pending SCTE tag data at the very end of the playlist.
+    // This data wouldn't be associated with a segment URI line if the playlist ends right after the tag.
+    // We can potentially dispatch this as a playlist-level SCTE signal if needed, or discard it.
+    // For now, discard as the request implies segment-associated SCTE data.
+    if (pendingScteTagData) {
+        console.warn('[hls_parser] Playlist ended with pending SCTE tag data:', pendingScteTagData.line);
+        pendingScteTagData = null; // Discard unassociated data
     }
 
     // Update the segments list for this specific playlist in the state
@@ -446,50 +583,89 @@ function parseMediaPlaylist(content, baseUrl, playlistId) {
 
 
 // ---- Playlist Refresh (Live) ----
-function startPlaylistRefresh(url, playlistId) {
-    // Clear any existing interval first
+function startPlaylistRefresh(initialRefreshUrl, playlistId) {
+    // Clear any existing interval specifically for this playlistId if you were managing multiple.
+    // Since state.playlistRefreshInterval is singular, this clears any ongoing refresh.
     if (state.playlistRefreshInterval) {
         clearInterval(state.playlistRefreshInterval);
-        state.playlistRefreshInterval = null;
-        console.log('[hls_parser] Cleared existing refresh interval.');
+        state.playlistRefreshInterval = null; // Important to nullify after clearing
+        console.log('[hls_parser] Cleared existing refresh interval before starting new one.');
     }
 
-    // Determine refresh interval (use target duration if available, else default)
-    // HLS spec suggests half the target duration, but let's be slightly less aggressive
-    const refreshDelay = state.targetDuration ? Math.max(1000, state.targetDuration * 1000 * 0.7) : state.updateInterval;
-    console.log(`[hls_parser] Starting playlist refresh for ${getShortUrl(url)} every ${refreshDelay}ms (Playlist ID: ${playlistId})`);
+    // Determine refresh interval.
+    // HLS spec suggests half the target duration.
+    // We use 70% of target duration, or a default, ensuring it's at least 1 second.
+    const refreshDelay = state.targetDuration
+        ? Math.max(1000, state.targetDuration * 1000 * 0.7)
+        : state.updateInterval;
 
+    console.log(`[hls_parser] Starting playlist refresh for Playlist ID: ${playlistId} (URL: ${getShortUrl(initialRefreshUrl)}) every ${refreshDelay}ms.`);
 
     state.playlistRefreshInterval = setInterval(async () => {
-        if (!state.isLive) { // Stop refreshing if ENDLIST was encountered
+        if (!state.isLive) {
             clearInterval(state.playlistRefreshInterval);
             state.playlistRefreshInterval = null;
-            console.log('[hls_parser] Stopping refresh interval as stream is no longer live.');
+            console.log(`[hls_parser] Stream for Playlist ID: ${playlistId} is no longer live. Stopping refresh.`);
             return;
         }
-        try {
-            const latestContent = await fetchManifest(url);
-            const currentPlaylist = state.mediaPlaylists[playlistId];
 
-            if (currentPlaylist && currentPlaylist.content !== latestContent) {
-                console.log(`[hls_parser] Playlist ${playlistId} updated. Reparsing.`);
-                currentPlaylist.content = latestContent; // Update content in state
-                parseMediaPlaylist(latestContent, url, playlistId); // Reparse
-                dispatchPlaylistParsed('media', { id: playlistId, url, content: latestContent }); // Notify UI of update
-            } else if (!currentPlaylist) {
-                console.warn(`[hls_parser] Playlist ${playlistId} not found during refresh cycle.`);
-                clearInterval(state.playlistRefreshInterval); // Stop if state is inconsistent
+        // Check if the playlist still exists in our state (it might have been removed by a stream reset)
+        const currentPlaylistInState = state.mediaPlaylists[playlistId];
+        if (!currentPlaylistInState) {
+            console.warn(`[hls_parser] Playlist ID: ${playlistId} no longer in state. Stopping its refresh cycle.`);
+            clearInterval(state.playlistRefreshInterval);
+            state.playlistRefreshInterval = null;
+            return;
+        }
+
+        try {
+            // Fetch the manifest. fetchManifest returns an object: { content: string, finalUrl: string }
+            const fetchResult = await fetchManifest(initialRefreshUrl); // Fetch using the URL passed to startPlaylistRefresh
+
+            const newPlaylistString = fetchResult.content;
+            const actualFetchedUrl = fetchResult.finalUrl; // The URL the content was *actually* fetched from (after redirects)
+
+            // Log if the URL changed due to redirects during this refresh fetch
+            if (initialRefreshUrl !== actualFetchedUrl && !actualFetchedUrl.startsWith('blob:')) {
+                console.log(`[hls_parser] Refresh URL for Playlist ID: ${playlistId} redirected: ${getShortUrl(initialRefreshUrl)} -> ${getShortUrl(actualFetchedUrl)}`);
+            }
+
+            // Compare the new content with the currently stored content for this playlist
+            if (currentPlaylistInState.content !== newPlaylistString) {
+                console.log(`[hls_parser] Playlist ID: ${playlistId} (fetched from ${getShortUrl(actualFetchedUrl)}) has updated content. Reparsing.`);
+
+                // Update the stored content string
+                currentPlaylistInState.content = newPlaylistString;
+
+                // CRITICAL: Update the stored URL for this playlist if it changed during this refresh.
+                // This ensures parseMediaPlaylist uses the correct baseUrl for resolving segment URIs if the playlist moved.
+                if (currentPlaylistInState.url !== actualFetchedUrl && !actualFetchedUrl.startsWith('blob:')) {
+                    console.log(`[hls_parser] Updating stored URL for Playlist ID: ${playlistId} from ${getShortUrl(currentPlaylistInState.url)} to ${getShortUrl(actualFetchedUrl)}.`);
+                    currentPlaylistInState.url = actualFetchedUrl;
+                }
+
+                // Parse the new playlist content.
+                // The baseUrl for parsing is the URL from which the content was actually fetched.
+                parseMediaPlaylist(newPlaylistString, actualFetchedUrl, playlistId);
+
+                // Dispatch an event indicating the media playlist was parsed/updated
+                dispatchPlaylistParsed('media', {
+                    id: playlistId,
+                    url: actualFetchedUrl, // Report the URL it was fetched from
+                    content: newPlaylistString
+                });
             } else {
-                console.log(`[hls_parser] Playlist ${playlistId} unchanged.`);
+                console.log(`[hls_parser] Playlist ID: ${playlistId} (fetched from ${getShortUrl(actualFetchedUrl)}) content unchanged.`);
             }
         } catch (err) {
-            console.error(`[hls_parser] Error refreshing playlist ${playlistId}:`, err);
-            dispatchStatusUpdate(`Error refreshing playlist: ${err.message}`);
-            // Optional: Implement retry logic or stop refreshing after too many errors
-            // clearInterval(state.playlistRefreshInterval);
-            // state.playlistRefreshInterval = null;
+            console.error(`[hls_parser] Error refreshing Playlist ID: ${playlistId} (attempted URL: ${getShortUrl(initialRefreshUrl)}):`, err);
+            dispatchStatusUpdate(`Error refreshing playlist ${playlistId}: ${err.message}`);
+            // Optional: Implement more sophisticated error handling here, e.g.,
+            // - Stop refreshing after N consecutive errors.
+            // - Implement an exponential backoff for retries.
+            // For now, it will simply log the error and try again on the next interval.
         }
-    }, refreshDelay); // Use calculated delay
+    }, refreshDelay);
 }
 
 // ---- Utility Functions ----
@@ -538,14 +714,18 @@ window.metaviewAPI = window.metaviewAPI || {};
 window.metaviewAPI.hlsparser = window.metaviewAPI.hlsparser || {};
 
 // ResponseStatus function
-window.metaviewAPI.hlsparser.ResponseStatus = function() {
+window.metaviewAPI.hlsparser.ResponseStatus = function () {
     return state.lastHttpStatus;
-}; 
+};
 
 // Make the init function globally accessible (or use modules later)
 window.HlsParser = {
     init: initHlsParser,
-    getState: () => state // Provide read-only access to state if needed elsewhere
+    getState: () => state, // Provide read-only access to state if needed elsewhere
+    // Expose parsing utilities? Not strictly needed for this refactor, but could be useful.
+    // resolveUrl: resolveUrl,
+    // getShortUrl: getShortUrl,
+    // extractVariantStreams: extractVariantStreams // Exposing internals might be too much
 };
 
 console.log('[hls_parser] Ready.');

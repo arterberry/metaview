@@ -19,7 +19,16 @@ const SCTE35_DESCRIPTOR_TAGS = {
     0x01: 'dtmf_descriptor',
     0x02: 'segmentation_descriptor',
     0x03: 'time_descriptor',
-    0x04: 'audio_descriptor'
+    0x04: 'audio_descriptor',
+    0x3c: 'private_promo_start_descriptor', 
+    0x3d: 'private_promo_end_descriptor', 
+    0x3e: 'private_dist_promo_start_desc',
+    0x3f: 'private_dist_promo_end_desc', 
+    0x42: 'private_desc_42',  
+    0x80: 'private_desc_80',
+    0x83: 'private_desc_83',
+    0x86: 'private_desc_86',
+    0x89: 'private_desc_89',
 };
 
 // Segmentation type IDs
@@ -536,10 +545,10 @@ const SCTE35Parser = {
 
             // Basic sanity check on section length
             if (sectionLength > bytes.length - (index + 2)) {
-                console.warn(`[scte35parse] Declared section length (${sectionLength}) exceeds remaining data length (${bytes.length - (index + 2)})`);
+                console.log(`[scte35parse] Declared section length (${sectionLength}) exceeds remaining data length (${bytes.length - (index + 2)})`);
                 // Decide whether to fail or parse what's available. Let's parse available but mark error.
             } else if (sectionLength < (14 - 3)) { // Minimum size of fixed fields (protocol_version to tier) is 11 bytes.
-                console.warn(`[scte35parse] Declared section length (${sectionLength}) seems too small.`);
+                console.log(`[scte35parse] Declared section length (${sectionLength}) seems too small.`);
             }
 
 
@@ -572,7 +581,7 @@ const SCTE35Parser = {
             const spliceCommandLength = bytes[index++];
 
             if (bytes.length < index + spliceCommandLength) {
-                console.warn(`[scte35parse] Declared splice command length (${spliceCommandLength}) exceeds remaining data length (${bytes.length - index}).`);
+                console.log(`[scte35parse] Declared splice command length (${spliceCommandLength}) exceeds remaining data length (${bytes.length - index}).`);
                 // Adjust command length to available data
                 // spliceCommandLength = bytes.length - index; // This might cause issues if command structure is incomplete
                 // Or, just parse what's there and let the command parsing functions handle truncation errors. Let's do the latter.
@@ -584,7 +593,7 @@ const SCTE35Parser = {
 
             if (spliceCommandLength > 0) {
                 if (bytes.length < index + 1) {
-                    console.warn('[scte35parse] Truncated SCTE-35 data (splice command type)');
+                    console.log('[scte35parse] Truncated SCTE-35 data (splice command type)');
                     spliceCommandInfo = { error: 'Truncated command type' };
                     // Cannot proceed parsing command info without type
                     index = bytes.length; // Skip to end
@@ -611,7 +620,7 @@ const SCTE35Parser = {
                             spliceCommandInfo = { raw: Array.from(commandBytes) }; // Capture raw bytes for unknown/unparsed commands
                             break;
                         default:
-                            console.warn(`[scte35parse] Unknown Splice Command Type: 0x${spliceCommandType.toString(16)}`);
+                            console.log(`[scte35parse] Unknown Splice Command Type: 0x${spliceCommandType.toString(16)}`);
                             spliceCommandInfo = { raw: Array.from(commandBytes), error: 'Unknown command type' };
                             break;
                     }
@@ -624,7 +633,7 @@ const SCTE35Parser = {
 
 
             if (bytes.length < index + 2) {
-                console.warn('[scte35parse] Truncated SCTE-35 data (descriptor loop length)');
+                console.log('[scte35parse] Truncated SCTE-35 data (descriptor loop length)');
                 // Cannot parse descriptors
                 return {
                     tableId, sectionSyntaxIndicator, privateIndicator, sectionLength,
@@ -644,7 +653,7 @@ const SCTE35Parser = {
             const descriptorEndIndex = index + descriptorLoopLength;
 
             if (descriptorEndIndex > bytes.length) {
-                console.warn(`[scte35parse] Declared descriptor loop length (${descriptorLoopLength}) exceeds remaining data length (${bytes.length - index}).`);
+                console.log(`[scte35parse] Declared descriptor loop length (${descriptorLoopLength}) exceeds remaining data length (${bytes.length - index}).`);
                 // Adjust end index to parse what's available
                 // descriptorEndIndex = bytes.length; // Let the loop handle bounds implicitly
             }
@@ -652,7 +661,7 @@ const SCTE35Parser = {
 
             while (index < descriptorEndIndex && index < bytes.length) {
                 if (bytes.length < index + 2) {
-                    console.warn('[scte35parse] Truncated SCTE-35 data (descriptor tag/length)');
+                    console.log('[scte35parse] Truncated SCTE-35 data (descriptor tag/length)');
                     break; // Cannot parse descriptor if tag/length are missing
                 }
                 const descriptorTag = bytes[index++];
@@ -660,7 +669,7 @@ const SCTE35Parser = {
                 const descriptorEndPosition = index + descriptorLength;
 
                 if (descriptorEndPosition > bytes.length) {
-                    console.warn(`[scte35parse] Declared descriptor length (${descriptorLength}) for tag 0x${descriptorTag.toString(16)} exceeds remaining data length (${bytes.length - index}).`);
+                    console.log(`[scte35parse] Declared descriptor length (${descriptorLength}) for tag 0x${descriptorTag.toString(16)} exceeds remaining data length (${bytes.length - index}).`);
                     // Adjust end position to parse what's available
                     // descriptorEndPosition = bytes.length;
                 }
@@ -684,8 +693,14 @@ const SCTE35Parser = {
                         descriptorInfo = { raw: Array.from(descriptorBytes) }; // Capture raw bytes
                         break;
                     default:
-                        console.warn(`[scte35parse] Unknown Descriptor Tag: 0x${descriptorTag.toString(16)}`);
-                        descriptorInfo = { raw: Array.from(descriptorBytes), error: 'Unknown descriptor tag' };
+                        const resolvedTagName = SCTE35_DESCRIPTOR_TAGS[descriptorTag];
+                        if (resolvedTagName) {
+                            console.log(`[scte35parse] Descriptor tag parsed: ${resolvedTagName}`);
+                        } else {
+                            const tagHex = `0x${descriptorTag.toString(16).padStart(2, '0')}`;
+                            console.log(`[scte35parse] Unknown Descriptor Tag: ${tagHex}`);
+                        }
+                        descriptorInfo = { raw: Array.from(descriptorBytes), note: resolvedTagName ? 'Parsed as private/custom tag' : 'Unknown descriptor tag' };
                         break;
                 }
 
@@ -710,9 +725,9 @@ const SCTE35Parser = {
                 // We could calculate and verify CRC here, but often not necessary for just parsing.
                 console.log(`[scte35parse] Found CRC-32 bytes at end.`); // CRC not parsed into a value
             } else if (bytes.length < expectedEndIndex && bytes.length >= expectedEndIndex - 4) {
-                console.warn(`[scte35parse] Data seems truncated, missing full CRC.`);
+                console.log(`[scte35parse] Data seems truncated, missing full CRC.`);
             } else {
-                console.warn(`[scte35parse] Data seems truncated, missing descriptor loop or CRC.`);
+                console.log(`[scte35parse] Data seems truncated, missing descriptor loop or CRC.`);
             }
 
 

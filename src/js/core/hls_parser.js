@@ -350,235 +350,298 @@ function extractVariantStreams(content) {
 function parseMediaPlaylist(content, baseUrl, playlistId) {
     dispatchStatusUpdate(`Parsing media playlist: ${getShortUrl(baseUrl)}`);
 
+    // Validate content is a string before splitting
+    if (typeof content !== 'string') {
+        console.error(`[hls_parser] Invalid content type passed to parseMediaPlaylist for ${playlistId}. Expected string, got ${typeof content}.`);
+        // Optionally dispatch an error or return early
+        dispatchStatusUpdate(`Error: Failed to parse playlist ${playlistId} due to invalid content.`);
+        return; // Stop processing if content isn't usable
+    }
+
     const lines = content.split('\n');
     const newSegments = [];
-    let currentSegment = null;
+    let currentSegment = null; // Holds the segment object being built (after EXTINF, before URI)
     let mediaSequence = parseInt(content.match(/#EXT-X-MEDIA-SEQUENCE:(\d+)/)?.[1], 10) || 0;
     let discontinuitySequence = parseInt(content.match(/#EXT-X-DISCONTINUITY-SEQUENCE:(\d+)/)?.[1], 10) || 0;
-    let currentKey = null; // Track current encryption key context
-    let currentMap = null; // Track current EXT-X-MAP context
-    let programDateTime = null; // Track Program Date Time
+    let currentKey = null;
+    let currentMap = null;
+    let programDateTime = null;
     let nextSegmentHasDiscontinuity = false;
-    let pendingScteTagData = null;
+    // let pendingScteTagData = null; // Holds SCTE tag data found *before* an EXTINF
+    let pendingScteTagDataList = []; // instead of pendingScteTagData = null
+
 
     for (const lineRaw of lines) {
         const line = lineRaw.trim();
-        if (!line) continue;
+        if (!line) continue; // Skip empty lines
 
-        // Add this logging for SCTE-related lines
-        if (line.includes('SCTE') || line.includes('CUE')) {
-            console.log('[hls_parser] Potential SCTE line detected:', line);
-            if (window.SCTE35Parser) { // Still need SCTE35Parser for extractFromHLSTags's initial regex
-                const extractionResult = window.SCTE35Parser.extractFromHLSTags(line, true); // Pass a new flag 'extractOnly'
+        // --- SCTE Tag Processing ---
+        // Check if the line contains potential SCTE information
+        if (line.includes('SCTE') || line.includes('CUE') || line.startsWith('#EXT-X-DATERANGE')) { // Added DATERANGE check explicitly
+            let scteDataToStore = null;
+            if (window.SCTE35Parser) {
+                // Extract only raw encoded data and type, defer full parsing
+                const extractionResult = window.SCTE35Parser.extractFromHLSTags(line, true); // extractOnly = true
                 if (extractionResult && extractionResult.encoded) {
-                    console.log('[hls_parser] Extracted SCTE-35 tag (parsing deferred):', extractionResult.encoded);
-                    pendingScteTagData = { // Store raw details
-                        line: line,
+                    console.log('[hls_parser] Extracted SCTE-35 tag data (parsing deferred):', extractionResult.encoded);
+                    scteDataToStore = {
+                        line: lineRaw, // Store raw line for reference
                         encoded: extractionResult.encoded,
-                        encodingType: extractionResult.encodingType,
-                        // NO 'parsed' field here yet
+                        encodingType: extractionResult.encodingType
                     };
                 }
+            } else if (line.includes('SCTE') || line.includes('CUE')) { // Log warning only if parser missing AND relevant keywords found
+                console.warn('[hls_parser] SCTE35Parser not available to process potential SCTE tag:', line);
             }
-        }
 
-        // Original SCTEDispatcher logic (can keep or remove depending on its actual use)
-        // If SCTEDispatcher does its *own* parsing, this could be redundant/conflicting.
-        // Based on the request, `scte_manager.js` should handle the display.
-        // The new scte35parse.js extracts the data for scte_manager.js.
-        // Let's assume SCTEDispatcher is an old/separate mechanism and focus on the new one.
-        // Removing or commenting out this line to avoid confusion:
-        /*
-        if (window.SCTEDispatcher) {
-            window.SCTEDispatcher.processTag(line);
-        } // Process SCTE tags if dispatcher is available
-        */
-        // Process SCTE tags if dispatcher is available 
+            // If SCTE data was extracted, decide where to attach it:
+            if (scteDataToStore) {
+                // Prioritize attaching to the segment whose EXTINF we just saw (currentSegment)
+                if (currentSegment) {
+                    // Initialize list if it doesn't exist
+                    if (!currentSegment.scteTagDataList) {
+                        currentSegment.scteTagDataList = [];
+                    }
+                    currentSegment.scteTagDataList.push(scteDataToStore);
+                    console.log(`[hls_parser] Attached SCTE tag directly to preceding segment ${currentSegment.id || currentSegment.sequence}`);
+                    // If we attached it directly, clear any pending data from *before* this segment's EXTINF
+                    // (This prevents attaching the same tag twice if it appeared right after EXTINF and before URI)
+                    // pendingScteTagData = null;
+                    pendingScteTagDataList = [];
+                } else {
+                    // No segment currently being built (e.g., tag is at start of playlist, or between segment URI and next EXTINF)
+                    // Store it as pending for the *next* segment.
+                    // NOTE: This assumes tags appearing *after* a segment URI but *before* the next EXTINF belong to the *next* segment.
+                    // If the Fox convention is *always* tag-after-segment, this fallback might misattribute.
+                    // However, sticking to the standard "pending" mechanism for tags before EXTINF is safer generally.
+                    if (pendingScteTagDataList.length > 0) {
+                        // This case is rare: multiple SCTE tags between segment URI and next EXTINF.
+                        // Overwrite the previous pending tag? Or collect into a list?
+                        // Let's overwrite for simplicity, assuming only the last one before EXTINF matters for the *next* segment.
+                        console.warn(`[hls_parser] Overwriting previous pending SCTE tag data with new one: ${lineRaw}`);
+                    }
+                    // pendingScteTagData = scteDataToStore;
+                    pendingScteTagDataList.push(scteDataToStore);
+                    console.log('[hls_parser] Stored SCTE tag data as pending for the next segment.');
+                }
+                // Continue to next line after processing SCTE tag
+                continue; // Skip further checks for this line (e.g., avoids treating #EXT-X-DATERANGE as EXTINF)
+            }
+        } // --- End SCTE Tag Processing ---
 
+        // --- Standard HLS Tag Processing ---
         if (line.startsWith('#EXTINF:')) {
+            // If we are starting a new segment, but there was pending SCTE data from *before* this EXTINF,
+            // it means that data wasn't attached to the previous segment (maybe because it was the first tag).
+            // We should probably keep it pending for *this* new segment being created now.
+            // The pendingScteTagData logic handles this implicitly (it's attached when the URI is found).
+
             const durationMatch = line.match(/#EXTINF:([\d.]+)/);
             const titleMatch = line.split(',')[1];
-            currentSegment = {
+            currentSegment = { // Create the new segment object
                 duration: durationMatch ? parseFloat(durationMatch[1]) : 0,
                 title: titleMatch ? titleMatch.trim() : '',
-                sequence: mediaSequence, // Associate with current sequence number
+                sequence: mediaSequence,
                 playlistId: playlistId,
-                tags: [], // Store associated tags
-                programDateTime: programDateTime // Associate PDT if available
-                // ---> SCTE TAG DATA WILL BE ATTACHED HERE LATER <---
-                // scteTagData: pendingScteTagData // No, attach when URL is found
-                // ---> END ATTACHMENT NOTE <---
+                tags: [],
+                programDateTime: programDateTime, // Apply most recent PDT
+                scteTagDataList: null // Initialize SCTE list for this segment
+                // Apply current encryption/map context if they exist
             };
             if (currentKey) currentSegment.encryption = currentKey;
-            if (currentMap) currentSegment.map = currentMap; // Associate map info
-            currentSegment.tags.push(line); // Store the raw tag line
+            if (currentMap) currentSegment.map = currentMap;
+            currentSegment.tags.push(lineRaw); // Add EXTINF line itself to tags
+
+            // Apply discontinuity flag if it was pending before this EXTINF
+            if (nextSegmentHasDiscontinuity) {
+                currentSegment.discontinuity = true;
+                currentSegment.tags.push('#EXT-X-DISCONTINUITY'); // Add the conceptual tag
+                nextSegmentHasDiscontinuity = false;
+            }
 
         } else if (line.startsWith('#EXT-X-BYTERANGE:')) {
-            if (currentSegment) {
+            if (currentSegment) { // Add to the segment currently being built
                 const byteRangeMatch = line.match(/#EXT-X-BYTERANGE:(\d+)(?:@(\d+))?/);
                 if (byteRangeMatch) {
                     currentSegment.byteRange = {
                         length: parseInt(byteRangeMatch[1], 10),
-                        offset: byteRangeMatch[2] ? parseInt(byteRangeMatch[2], 10) : null // Offset is optional
+                        offset: byteRangeMatch[2] ? parseInt(byteRangeMatch[2], 10) : null
                     };
-                    currentSegment.tags.push(line);
+                    currentSegment.tags.push(lineRaw);
                 }
-            }
+            } // else: Ignore if not related to a current segment
+
         } else if (line.startsWith('#EXT-X-KEY:')) {
-            currentKey = {
-                method: line.match(/METHOD=([^,]+)/)?.[1],
-                uri: line.match(/URI="([^"]+)"/)?.[1] ? resolveUrl(line.match(/URI="([^"]+)"/)[1], baseUrl) : null,
-                iv: line.match(/IV=([^,]+)/)?.[1],
-                keyformat: line.match(/KEYFORMAT="([^"]+)"/)?.[1],
-                keyformatversions: line.match(/KEYFORMATVERSIONS="([^"]+)"/)?.[1]
-            };
-            // Apply key to subsequent segments (until next #EXT-X-KEY or METHOD=NONE)
-            if (currentSegment) currentSegment.encryption = currentKey; // Apply to current if it exists
-            // currentSegment?.tags.push(line);
-            // Add key tag to segment tags array if a segment is pending
-            if (currentSegment) currentSegment.tags.push(lineRaw);
-            // If no segment is pending, this key applies to future segments, store it globally or on playlist state if needed
-            // For now, just applying to current/next segment context seems sufficient based on typical HLS parsing logic.
+            currentKey = { /* ... parse key attributes ... */ };
+            currentKey.method = line.match(/METHOD=([^,]+)/)?.[1];
+            currentKey.uri = line.match(/URI="([^"]+)"/)?.[1] ? resolveUrl(line.match(/URI="([^"]+)"/)[1], baseUrl) : null;
+            currentKey.iv = line.match(/IV=([^,]+)/)?.[1];
+            currentKey.keyformat = line.match(/KEYFORMAT="([^"]+)"/)?.[1];
+            currentKey.keyformatversions = line.match(/KEYFORMATVERSIONS="([^"]+)"/)?.[1];
+
+            if (currentSegment) {
+                currentSegment.encryption = currentKey; // Apply context to segment being built
+                currentSegment.tags.push(lineRaw);     // Add tag line to segment's tags
+            }
+            // This key context persists for subsequent segments until changed
 
         } else if (line.startsWith('#EXT-X-MAP:')) {
-            currentMap = {
-                uri: resolveUrl(line.match(/URI="([^"]+)"/)?.[1], baseUrl),
-                byterange: line.match(/BYTERANGE="([^"]+)"/)?.[1] // Optional
-            };
-            // Apply map to subsequent segments
-            if (currentSegment) currentSegment.map = currentMap;
-            // currentSegment?.tags.push(line);
-            if (currentSegment) currentSegment.tags.push(lineRaw); // Add map tag to segment tags
+            currentMap = { /* ... parse map attributes ... */ };
+            currentMap.uri = resolveUrl(line.match(/URI="([^"]+)"/)?.[1], baseUrl);
+            currentMap.byterange = line.match(/BYTERANGE="([^"]+)"/)?.[1];
 
+            if (currentSegment) {
+                currentSegment.map = currentMap;      // Apply context to segment being built
+                currentSegment.tags.push(lineRaw);     // Add tag line to segment's tags
+            }
+            // This map context persists for subsequent segments until changed
 
         } else if (line.startsWith('#EXT-X-PROGRAM-DATE-TIME:')) {
-            programDateTime = new Date(line.substring('#EXT-X-PROGRAM-DATE-TIME:'.length));
-            if (currentSegment) currentSegment.programDateTime = programDateTime; // Apply to current segment if EXTINF came first
-            // currentSegment?.tags.push(line);
-            if (currentSegment) currentSegment.tags.push(lineRaw); // Add PDT tag to segment tags
+            try {
+                programDateTime = new Date(line.substring('#EXT-X-PROGRAM-DATE-TIME:'.length));
+            } catch (e) {
+                console.warn("Error parsing Program Date Time:", line, e);
+                programDateTime = null;
+            }
+
+            if (currentSegment) {
+                currentSegment.programDateTime = programDateTime; // Apply context to segment being built
+                currentSegment.tags.push(lineRaw);             // Add tag line to segment's tags
+            }
+            // This PDT context persists for subsequent segments until changed
 
         } else if (line === '#EXT-X-DISCONTINUITY') {
             console.log('[hls_parser] Found exact #EXT-X-DISCONTINUITY tag.');
-            discontinuitySequence++; // Increment discontinuity counter
-            if (currentSegment) {
+            discontinuitySequence++;
+            if (currentSegment) { // If EXTINF already seen, apply to current segment
                 currentSegment.discontinuity = true;
-                currentSegment.tags.push(line);
-                // ---> DISPATCH EVENT WHEN DISCONTINUITY TAG IS ASSOCIATED WITH A SEGMENT <---
-                // We might dispatch this slightly later when the segment URL is known,
-                // but attaching the flag here is correct. We'll dispatch when segment is pushed.
-            } else {
-                // If discontinuity appears before EXTINF, store it to apply to the *next* segment
+                currentSegment.tags.push(lineRaw);
+            } else { // If discontinuity comes before EXTINF, flag it for the next segment
                 nextSegmentHasDiscontinuity = true;
             }
-            // Reset PDT context after discontinuity? (Check HLS spec - usually yes)
-            // programDateTime = null;
 
         } else if (line.startsWith('#EXT-X-MEDIA-SEQUENCE:')) {
-            // Already parsed mediaSequence above, just acknowledge
-            continue;
+            // Update mediaSequence if needed (though usually only parsed once at start)
+            mediaSequence = parseInt(line.split(':')[1], 10) || mediaSequence;
+            // Don't add this tag to individual segments
+
         } else if (line.startsWith('#EXT-X-TARGETDURATION:')) {
-            // Store target duration for context if needed
             state.targetDuration = parseInt(line.split(':')[1], 10);
+            // Don't add this tag to individual segments
+
         } else if (line.startsWith('#EXT-X-VERSION:')) {
             state.hlsVersion = parseInt(line.split(':')[1], 10);
+            // Don't add this tag to individual segments
+
         } else if (line.startsWith('#EXT-X-ENDLIST')) {
-            state.isLive = false; // Explicit end found
+            state.isLive = false;
             clearInterval(state.playlistRefreshInterval);
             state.playlistRefreshInterval = null;
             console.log('[hls_parser] Reached ENDLIST.');
             dispatchStatusUpdate("VOD stream finished loading.");
+            // Don't add this tag to individual segments
+            // Process any final pending segment before stopping
+            if (currentSegment) {
+                console.warn("[hls_parser] Playlist ended unexpectedly after EXTINF but before segment URI for sequence", currentSegment.sequence);
+                // Decide whether to discard or dispatch the incomplete segment
+                currentSegment = null; // Discard incomplete segment at endlist
+            }
 
+
+            // --- Segment URI Processing ---
         } else if (currentSegment && !line.startsWith('#')) {
-            // This line is the segment URI
+            // This line is the segment URI, associated with the preceding EXTINF (currentSegment)
             currentSegment.url = resolveUrl(line, baseUrl);
-            currentSegment.id = `${playlistId}_seq${currentSegment.sequence}`; // Use sequence for ID
-            currentSegment.filename = line.split('/').pop().split('?')[0]; // Extract filename
+            currentSegment.id = `${playlistId}_seq${currentSegment.sequence}`;
+            currentSegment.filename = line.split('/').pop().split('?')[0];
 
-            // ---> ATTACH PENDING SCTE TAG DATA TO THE SEGMENT <---
-            if (pendingScteTagData) {
-                currentSegment.scteTagData = pendingScteTagData;
-                pendingScteTagData = null; // Reset for the next segment
-                console.log(`[hls_parser] Attached SCTE tag data to segment ${currentSegment.id}`);
+            // Attach any SCTE tag data that was found *before* this segment's EXTINF
+            // if (pendingScteTagData) {
+            //     // Ensure list exists
+            //     if (!currentSegment.scteTagDataList) {
+            //         currentSegment.scteTagDataList = [];
+            //     }
+            //     currentSegment.scteTagDataList.push(pendingScteTagData);
+            //     console.log(`[hls_parser] Attached PENDING SCTE tag data to segment ${currentSegment.id}`);
+            //     pendingScteTagData = null; // Clear pending data once attached
+            // }
+            if (pendingScteTagDataList.length > 0) {
+                if (!currentSegment.scteTagDataList) {
+                    currentSegment.scteTagDataList = [];
+                }
+                currentSegment.scteTagDataList.push(...pendingScteTagDataList);
+                console.log(`[hls_parser] Attached ${pendingScteTagDataList.length} pending SCTE tag(s) to segment ${currentSegment.id}`);
+                pendingScteTagDataList = []; // Reset after attaching
             }
-            // ---> END ATTACHMENT <---
+            
 
-            // ---> APPLY DISCONTINUITY FLAG IF IT PRECEDED EXTINF <---
-            if (nextSegmentHasDiscontinuity) {
-                currentSegment.discontinuity = true;
-                // Optionally add the tag line itself if needed: currentSegment.tags.push('#EXT-X-DISCONTINUITY');
-                nextSegmentHasDiscontinuity = false; // Reset flag
-            }
-            // ---> END APPLY FLAG <---
-
-
-            // Add the fully formed segment
+            // Add the fully formed segment to the list for this parse cycle
             newSegments.push(currentSegment);
-            dispatchSegmentAdded(currentSegment); // Send to UI (manifest_ui listens to this)
 
-            // ---> DISPATCH DISCONTINUITY EVENT IF SEGMENT HAS FLAG <---
+            // Dispatch event for this segment (UI / scte_manager listens)
+            dispatchSegmentAdded(currentSegment);
+
+            // Dispatch discontinuity event if flagged
             if (currentSegment.discontinuity) {
                 console.log(`[hls_parser] Dispatching discontinuity for segment: ${currentSegment.id}`);
-                document.dispatchEvent(new CustomEvent('hlsDiscontinuityDetected', {
-                    detail: {
-                        segment: currentSegment // Pass the whole segment object
-                    }
-                }));
+                document.dispatchEvent(new CustomEvent('hlsDiscontinuityDetected', { detail: { segment: currentSegment } }));
             }
-            // ---> END DISPATCH <---
 
+            // Prepare for the next segment
             mediaSequence++;
-            currentSegment = null;
-            // nextSegmentHasDiscontinuity = false; // Already reset above
-        } else if (!line.startsWith('#') && line.trim()) {
-            // This is a segment URI line WITHOUT a preceding #EXTINF. This is non-standard,
-            // but might occur in malformed manifests or specific edge cases.
-            // In standard HLS, every segment URI must be preceded by EXTINF.
-            // If we encounter this, we technically can't create a segment object with duration, etc.
-            // We'll skip it for now, relying on EXTINF always preceding the URI.
+            currentSegment = null; // Reset currentSegment, ready for the next EXTINF
+
+        } else if (!currentSegment && !line.startsWith('#') && line.trim()) {
+            // Standalone segment URI without preceding EXTINF - non-standard.
             console.warn(`[hls_parser] Encountered standalone segment URI without #EXTINF: ${line}`);
-            // Ensure pending SCTE data is cleared as it won't be attached to a valid segment
-            pendingScteTagData = null;
+            // Discard any pending SCTE data as we can't reliably associate it
+            // pendingScteTagData = null;
+            pendingScteTagDataList = [];
             nextSegmentHasDiscontinuity = false;
         }
+        // Implicitly ignore other unrecognized '#' tags
+    } // --- End loop through lines ---
+
+    // Handle any SCTE tag data that was pending at the very end (e.g., after last segment URI or after ENDLIST)
+    // if (pendingScteTagData) {
+    //     console.warn('[hls_parser] Playlist parsing ended with unattached pending SCTE tag data:', pendingScteTagData.line);
+    //     // Decide what to do: discard, or dispatch a playlist-level event? For now, discard.
+    //     pendingScteTagData = null;
+    // }
+    if (pendingScteTagDataList.length > 0) {
+        console.warn(`[hls_parser] Playlist parsing ended with ${pendingScteTagDataList.length} unattached pending SCTE tag(s):`);
+        pendingScteTagDataList.forEach((tag, idx) => {
+            console.warn(` - [${idx}] Line: ${tag.line}`);
+        });
+        // Decide what to do: discard, or dispatch a playlist-level event? For now, discard.
+        pendingScteTagDataList = [];
     }
 
-    // Handle any pending SCTE tag data at the very end of the playlist.
-    // This data wouldn't be associated with a segment URI line if the playlist ends right after the tag.
-    // We can potentially dispatch this as a playlist-level SCTE signal if needed, or discard it.
-    // For now, discard as the request implies segment-associated SCTE data.
-    if (pendingScteTagData) {
-        console.warn('[hls_parser] Playlist ended with pending SCTE tag data:', pendingScteTagData.line);
-        pendingScteTagData = null; // Discard unassociated data
-    }
-
-    // Update the segments list for this specific playlist in the state
+    // --- Update state.mediaPlaylists[playlistId].segments ---
     if (state.mediaPlaylists[playlistId]) {
-        // We might need more sophisticated merging logic for live streams
-        // to avoid duplicates if refresh is faster than segment duration.
-        // For now, just replace or append based on sequence numbers.
-        // Basic approach: find the latest known sequence from the new list
-        // and append segments with higher sequence numbers.
         const existingSegments = state.mediaPlaylists[playlistId].segments;
         const lastExistingSeq = existingSegments.length > 0 ? existingSegments[existingSegments.length - 1].sequence : -1;
 
+        // Filter segments from *this parse cycle* to only include those newer than what's stored
         const trulyNewSegments = newSegments.filter(s => s.sequence > lastExistingSeq);
-        state.mediaPlaylists[playlistId].segments.push(...trulyNewSegments);
 
-        // Log how many *new* segments were actually added after filtering
         if (trulyNewSegments.length > 0) {
-            console.log(`[hls_parser] Added ${trulyNewSegments.length} new segments to playlist ${playlistId}`);
+            state.mediaPlaylists[playlistId].segments.push(...trulyNewSegments);
+            console.log(`[hls_parser] Added ${trulyNewSegments.length} new segments to playlist ${playlistId} (Total now: ${state.mediaPlaylists[playlistId].segments.length}).`);
+        } else if (newSegments.length > 0) {
+            console.log(`[hls_parser] Parsed ${newSegments.length} segments for playlist ${playlistId}, but none were newer than sequence ${lastExistingSeq}.`);
+        } else {
+            console.log(`[hls_parser] No segments parsed in this update for playlist ${playlistId}.`);
         }
-
     } else {
-        // Should not happen if playlist was added correctly before parsing
-        console.warn(`[hls_parser] Playlist ID ${playlistId} not found in state when adding segments.`);
-        state.mediaPlaylists[playlistId] = { url: baseUrl, content, segments: newSegments };
+        // This should ideally not happen if the playlist was added before calling parseMediaPlaylist
+        console.error(`[hls_parser] Playlist ID ${playlistId} not found in state when trying to add segments! Creating entry.`);
+        state.mediaPlaylists[playlistId] = { url: baseUrl, content: content, segments: newSegments };
     }
 
-
-    // Calculate total segments parsed for status update
+    // Calculate total unique segments encountered across all playlists
     const totalSegments = state.allSegments.filter(s => s.type !== 'master' && s.type !== 'media' && s.type !== 'unknown').length;
-    dispatchStatusUpdate(`Parsed ${totalSegments} segments total.`);
+    dispatchStatusUpdate(`Parsed ${totalSegments} unique segments total.`);
 }
 
 

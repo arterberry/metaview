@@ -373,59 +373,90 @@ function parseMediaPlaylist(content, baseUrl, playlistId) {
 
     for (const lineRaw of lines) {
         const line = lineRaw.trim();
-        if (!line) continue; // Skip empty lines
+        if (!line) continue;
 
         // --- SCTE Tag Processing ---
-        // Check if the line contains potential SCTE information
-        if (line.includes('SCTE') || line.includes('CUE') || line.startsWith('#EXT-X-DATERANGE')) { // Added DATERANGE check explicitly
+        if (line.includes('SCTE') || line.includes('CUE') || line.startsWith('#EXT-X-DATERANGE')) {
             let scteDataToStore = null;
-            if (window.SCTE35Parser) {
-                // Extract only raw encoded data and type, defer full parsing
-                const extractionResult = window.SCTE35Parser.extractFromHLSTags(line, true); // extractOnly = true
-                if (extractionResult && extractionResult.encoded) {
-                    console.log('[hls_parser] Extracted SCTE-35 tag data (parsing deferred):', extractionResult.encoded);
-                    scteDataToStore = {
-                        line: lineRaw, // Store raw line for reference
-                        encoded: extractionResult.encoded,
-                        encodingType: extractionResult.encodingType
-                    };
+
+            // NEW LOGIC: Only extract raw encoded data here.
+            // scte_manager.js will handle the parsing using SCTECoreParser.
+            // This aligns with the goal of hls_parser just extracting HLS elements.
+
+            let extractedRawScte = null;
+            let encodingType = null; // 'hex' or 'base64'
+
+            // Simple extraction for common SCTE tags like #EXT-X-SCTE35, #EXT-OATCLS-SCTE35, #EXT-X-CUE
+            // and #EXT-X-DATERANGE with SCTE35 attribute.
+            // This is a simplified version of what a full SCTE35Parser.extractFromHLSTags might do.
+            // A more robust regex or dedicated small utility could be used if complex tag formats are common.
+
+            let match;
+            if ((match = line.match(/#(?:EXT-X-SCTE35|EXT-OATCLS-SCTE35|EXT-X-CUE):(.*)/i))) {
+                let sctePayload = match[1].trim();
+                // Check if it's likely base64 or hex.
+                // Base64 typically ends with '=' or has A-Z, a-z, 0-9, +, /
+                // Hex is 0-9, A-F, a-f and has an even length.
+                if (/^[A-Za-z0-9+/=]+$/.test(sctePayload) && (sctePayload.length % 4 === 0 || sctePayload.endsWith('='))) {
+                    // It's likely Base64, but could also be hex if it only contains 0-9, A-F.
+                    // A more robust check might be needed if ambiguity is high.
+                    // For now, assume if it looks like b64, it is.
+                    // Comcast parser can handle hex even if it looks like b64 chars, but prefers explicit type.
+                    if (!/^[0-9A-Fa-f]+$/.test(sctePayload) || (sctePayload.length % 2 !== 0)) {
+                         encodingType = 'base64';
+                    } else {
+                        // Ambiguous: could be hex or base64 made of hex chars. Default to hex if it fits.
+                        encodingType = 'hex';
+                    }
+                } else if (/^[0-9A-Fa-f]+$/i.test(sctePayload) && sctePayload.length % 2 === 0) {
+                    encodingType = 'hex';
+                } else {
+                    console.warn(`[hls_parser] Could not determine encoding for SCTE payload: ${sctePayload} in line: ${lineRaw}`);
                 }
-            } else if (line.includes('SCTE') || line.includes('CUE')) { // Log warning only if parser missing AND relevant keywords found
-                console.warn('[hls_parser] SCTE35Parser not available to process potential SCTE tag:', line);
+                if (encodingType) {
+                    extractedRawScte = sctePayload;
+                }
+            } else if ((match = line.match(/#EXT-X-DATERANGE:.*SCTE35-CMD=(0x[0-9A-Fa-f]+)/i))) { // Regex updated for SCTE35-CMD and 0x
+                let sctePayloadWithPrefix = match[1].trim(); // This will be "0xFC3052..."
+                let sctePayload = sctePayloadWithPrefix.startsWith('0x') ? sctePayloadWithPrefix.substring(2) : sctePayloadWithPrefix; // Remove "0x"
+
+                // For SCTE35-CMD, the data is typically HEX.
+                if (/^[0-9A-Fa-f]+$/i.test(sctePayload) && sctePayload.length % 2 === 0) {
+                    encodingType = 'hex';
+                    extractedRawScte = sctePayload;
+                } else {
+                     console.warn(`[hls_parser] SCTE35-CMD payload for DATERANGE was not valid hex after removing '0x': ${sctePayload} in line: ${lineRaw}`);
+                }
+            }
+            // Add other SCTE tag patterns here if needed (e.g., #EXT-X-CUE-OUT with raw data)
+
+            if (extractedRawScte && encodingType) {
+                // console.log(`[hls_parser] Extracted raw SCTE data (type: ${encodingType}): ${extractedRawScte.substring(0,50)}...`);
+                scteDataToStore = {
+                    line: lineRaw, // Store raw line for reference
+                    encoded: extractedRawScte,
+                    encodingType: encodingType
+                };
+            } else if (line.includes('SCTE35-CMD') || line.includes('SCTE') || line.includes('CUE')) {// Log if keywords present but no extraction
+                if (line.includes('SCTE35-CMD') || (!line.startsWith('#EXT-X-DATERANGE') && (line.includes('SCTE') || line.includes('CUE')))) {
+                    console.log(`[hls_parser] Line contains SCTE/CUE keywords but no raw data extracted: ${lineRaw}.`);
+                }
             }
 
-            // If SCTE data was extracted, decide where to attach it:
+
             if (scteDataToStore) {
-                // Prioritize attaching to the segment whose EXTINF we just saw (currentSegment)
                 if (currentSegment) {
-                    // Initialize list if it doesn't exist
                     if (!currentSegment.scteTagDataList) {
                         currentSegment.scteTagDataList = [];
                     }
                     currentSegment.scteTagDataList.push(scteDataToStore);
-                    console.log(`[hls_parser] Attached SCTE tag directly to preceding segment ${currentSegment.id || currentSegment.sequence}`);
-                    // If we attached it directly, clear any pending data from *before* this segment's EXTINF
-                    // (This prevents attaching the same tag twice if it appeared right after EXTINF and before URI)
-                    // pendingScteTagData = null;
-                    pendingScteTagDataList = [];
+                    // console.log(`[hls_parser] Attached SCTE tag directly to preceding segment ${currentSegment.id || currentSegment.sequence}`);
+                    pendingScteTagDataList = []; // Clear pending if attached directly
                 } else {
-                    // No segment currently being built (e.g., tag is at start of playlist, or between segment URI and next EXTINF)
-                    // Store it as pending for the *next* segment.
-                    // NOTE: This assumes tags appearing *after* a segment URI but *before* the next EXTINF belong to the *next* segment.
-                    // If the Fox convention is *always* tag-after-segment, this fallback might misattribute.
-                    // However, sticking to the standard "pending" mechanism for tags before EXTINF is safer generally.
-                    if (pendingScteTagDataList.length > 0) {
-                        // This case is rare: multiple SCTE tags between segment URI and next EXTINF.
-                        // Overwrite the previous pending tag? Or collect into a list?
-                        // Let's overwrite for simplicity, assuming only the last one before EXTINF matters for the *next* segment.
-                        console.warn(`[hls_parser] Overwriting previous pending SCTE tag data with new one: ${lineRaw}`);
-                    }
-                    // pendingScteTagData = scteDataToStore;
                     pendingScteTagDataList.push(scteDataToStore);
-                    console.log('[hls_parser] Stored SCTE tag data as pending for the next segment.');
+                    // console.log('[hls_parser] Stored SCTE tag data as pending for the next segment.');
                 }
-                // Continue to next line after processing SCTE tag
-                continue; // Skip further checks for this line (e.g., avoids treating #EXT-X-DATERANGE as EXTINF)
+                continue; // Skip further checks for this line
             }
         } // --- End SCTE Tag Processing ---
 

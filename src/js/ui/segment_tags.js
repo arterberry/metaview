@@ -15,80 +15,94 @@ function listenForScteAdEvents() {
     document.addEventListener('scteAdSegmentDetected', (e) => {
         const segmentUrl = e.detail?.segmentUrl;
         if (segmentUrl) {
-            console.log('[segment-tags] Received scteAdSegmentDetected for URL:', segmentUrl);
+            console.log(`[segment-tags] SCTE AD EVENT: ${segmentUrl}`);
             scteAdSegmentUrls.add(segmentUrl);
 
-            // Find the segment element in the UI and update its badge
-            const segmentElement = document.querySelector(`#metadataList div[data-segment-url="${CSS.escape(segmentUrl)}"]`);
+            // Attempt to find and update the badge for this segment if it's already in the DOM.
+            // The MutationObserver will handle elements added *after* this event.
+            const segmentElement = findSegmentElementByUrl(segmentUrl); // Use a helper
             if (segmentElement) {
-                // Remove any existing badge to prevent duplicates or conflicts
-                const existingBadge = segmentElement.querySelector('.segment-badge');
-                if (existingBadge) {
-                    existingBadge.remove();
-                }
-                // Add the "Ad" badge
+                console.log(`[segment-tags] SCTE AD EVENT: Found existing segment ${segmentUrl}, re-badging as Ad.`);
+                // Remove any existing badge(s) first to ensure clean update
+                segmentElement.querySelectorAll('.segment-badge').forEach(b => b.remove());
+
                 const adBadge = buildBadge('Ad'); // Force "Ad" type
                 if (adBadge) {
-                    // Insert after timestamp or at a consistent position
-                    const timestampEl = segmentElement.querySelector('.segment-timestamp'); // Assuming timestamp has this class
-                    if (timestampEl && timestampEl.nextSibling) {
-                        segmentElement.insertBefore(adBadge, timestampEl.nextSibling);
-                    } else if (segmentElement.firstChild && segmentElement.firstChild.nextSibling) {
-                        segmentElement.insertBefore(adBadge, segmentElement.firstChild.nextSibling);
-                    } else {
-                        segmentElement.appendChild(adBadge); // Fallback
-                    }
-                    console.log('[segment-tags] Added "Ad" badge to segment:', segmentUrl);
+                    insertBadge(segmentElement, adBadge); // Use a helper for consistent insertion
                 }
             } else {
-                console.log('[segment-tags] Segment element not found in UI for SCTE ad URL:', segmentUrl);
+                // If not found, MutationObserver will handle it when it's added.
+                console.log(`[segment-tags] SCTE AD EVENT: Segment ${segmentUrl} not in UI yet. Observer will handle.`);
             }
         }
     });
 }
 
+// Helper function to find a segment element by its URL
+function findSegmentElementByUrl(segmentUrl) {
+    if (!segmentUrl) return null;
+    // Ensure the metadataList container exists
+    const container = document.getElementById('metadataList');
+    if (!container) return null;
+    // Query within the container
+    return container.querySelector(`div[data-segment-url="${CSS.escape(segmentUrl)}"]`);
+}
+
+// Helper function to insert the badge consistently
+function insertBadge(segmentElement, badge) {
+    if (!segmentElement || !badge) return;
+    // Attempt to insert after a timestamp element if it exists, for consistent placement
+    const timestampEl = segmentElement.querySelector('.segment-timestamp');
+    if (timestampEl && timestampEl.nextSibling) {
+        segmentElement.insertBefore(badge, timestampEl.nextSibling);
+    } else if (segmentElement.firstChild && segmentElement.firstChild.nextSibling) {
+        // Fallback: insert after the first child's sibling (usually the segment URL text node)
+        segmentElement.insertBefore(badge, segmentElement.firstChild.nextSibling);
+    } else {
+        // Ultimate fallback: append
+        segmentElement.appendChild(badge);
+    }
+}
+
 function observeSegmentList() {
     const observer = new MutationObserver((mutationsList) => {
-        // Iterate over added nodes to only process new elements
         for (const mutation of mutationsList) {
             if (mutation.type === 'childList') {
                 mutation.addedNodes.forEach(node => {
                     if (node.nodeType === Node.ELEMENT_NODE) {
-                        // Check if the node itself is a segment div or if it contains them
                         const elementsToProcess = [];
-                        if (node.matches && node.matches('#metadataList div[data-segment-id]')) {
+                        // Check if the added node itself is a segment div
+                        if (node.matches && node.matches('div[data-segment-id][data-segment-url]')) { // Be more specific
                             elementsToProcess.push(node);
-                        } else if (node.querySelectorAll) {
-                            node.querySelectorAll('#metadataList div[data-segment-id]').forEach(el => elementsToProcess.push(el));
                         }
+                        // Also check if the added node contains segment divs (e.g., if a batch of rows is added)
+                        // Query only within the added node for efficiency
+                        node.querySelectorAll('div[data-segment-id][data-segment-url]').forEach(el => elementsToProcess.push(el));
 
-                        elementsToProcess.forEach(el => {
+                        // Deduplicate if elements were found by both paths (though unlikely with current query)
+                        const uniqueElements = [...new Set(elementsToProcess)];
+
+                        uniqueElements.forEach(el => {
+                            // Make sure we haven't already processed this exact element by the event listener
+                            if (el.querySelector('.segment-badge.segment-ad')) {
+                                // console.log(`[segment-tags] OBSERVER: Segment ${el.getAttribute('data-segment-url')} already badged as Ad, skipping observer re-badge.`);
+                                return;
+                            }
+                            // Remove any other pre-existing badge before classifying (e.g. "Live", "Segment")
+                            el.querySelectorAll('.segment-badge').forEach(b => b.remove());
+
                             const url = el.getAttribute('data-segment-url');
-                            // Check if this URL was previously marked as an SCTE ad
                             const isScteAd = scteAdSegmentUrls.has(url);
 
-
-                            // *** DEBUG LOG 3: Observer Processing ***
                             if (isScteAd) {
-                                console.log(`%c[SEGMENT_TAGS_OBSERVER] Segment ${url} IS an SCTE ad (found in scteAdSegmentUrls). Classifying.`, "color: purple; font-weight: bold;");
-                            } else {
-                                // Optional: log for non-SCTE ads if needed for other debugging
-                                // console.log(`[SEGMENT_TAGS_OBSERVER] Segment ${url} is NOT (yet) an SCTE ad. Classifying based on URL/typeHint.`);
+                                console.log(`%c[segment-tags] OBSERVER: Segment ${url} IS SCTE ad. Classifying.`, "color: green; font-weight: bold;");
                             }
 
-                            const type = classifySegment(url, null, isScteAd); // Pass SCTE ad status
+                            const type = classifySegment(url, null, isScteAd);
                             const badge = buildBadge(type);
 
-                            if (badge && !el.querySelector('.segment-badge')) {
-                                // Insert after timestamp or at a consistent position
-                                const timestampEl = el.querySelector('.segment-timestamp');
-                                if (timestampEl && timestampEl.nextSibling) {
-                                    el.insertBefore(badge, timestampEl.nextSibling);
-                                } else if (el.firstChild && el.firstChild.nextSibling) {
-                                    el.insertBefore(badge, el.firstChild.nextSibling);
-                                } else {
-                                    el.appendChild(badge); // Fallback
-                                }
+                            if (badge) { // No need to check for existing badge again, we removed it
+                                insertBadge(el, badge); // Use helper
                             }
                         });
                     }
@@ -99,7 +113,9 @@ function observeSegmentList() {
 
     const container = document.getElementById('metadataList');
     if (container) {
-        observer.observe(container, { childList: true, subtree: true });
+        observer.observe(container, { childList: true, subtree: true }); // Observe the list for additions
+    } else {
+        console.warn('[segment-tags] metadataList container not found for MutationObserver.');
     }
 }
 
@@ -109,11 +125,12 @@ function classifySegment(rawUrl = '', typeHint = null, isScteAdByTag = false) { 
         return 'Segment';
     }
 
-    // --- NEW: Prioritize SCTE-based Ad detection ---
+    // --- PRIORITY 1: SCTE-based Ad detection ---
     if (isScteAdByTag) {
+        console.log(`[segment-tags] CLASSIFY: ${rawUrl} classified as 'Ad' due to SCTE tag.`);
         return 'Ad';
     }
-    // --- END NEW ---
+    // --- END PRIORITY 1 ---
 
     let pathname = '';
     try {
@@ -153,27 +170,29 @@ function classifySegment(rawUrl = '', typeHint = null, isScteAdByTag = false) { 
 
     return 'Segment';
 }
-window.classifySegment = classifySegment;
+// window.classifySegment = classifySegment;
 
 function buildBadge(label) {
     if (!label) return null;
     const badge = document.createElement('span');
-    badge.className = `segment-badge segment-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`; // Sanitize class name
+    // Sanitize class name: lowercase, replace non-alphanumeric with hyphen
+    const sanitizedLabel = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-$/, '');
+    badge.className = `segment-badge segment-${sanitizedLabel}`;
     badge.textContent = label;
     return badge;
 }
 
-
+// listenForExpirationEvents function (assuming it's fine and working independently)
 function listenForExpirationEvents() {
     document.addEventListener('segmentExpired', (e) => {
         const segmentId = e.detail?.id;
-        // Ensure segmentId is properly escaped for querySelector if it can contain special characters
+        if (!segmentId) return;
         const el = document.querySelector(`div[data-segment-id="${CSS.escape(segmentId)}"]`);
         if (el && !el.querySelector('.segment-expired')) {
             const badge = document.createElement('span');
-            badge.className = 'segment-expired';
+            badge.className = 'segment-expired segment-badge'; // Add segment-badge for consistent styling/removal
             badge.textContent = 'EXPIRED';
-            el.appendChild(badge);
+            el.appendChild(badge); // Consider consistent insertion like other badges
         }
     });
 }

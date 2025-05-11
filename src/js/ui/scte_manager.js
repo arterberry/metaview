@@ -1,85 +1,80 @@
 // js/ui/scte_manager.js
-// Description: Originally developed for detecting SCTE-35 signal detection, it now can identify and manage identification of ad creatives.
+// Description: Manages SCTE-35 signal detection, processing, and UI display of the LATEST event.
 
 console.log('[scte_manager] Initializing...');
 
 (function () {
-    // Ensure SCTE35 parser from Comcast is available globally -- REMOVED
-    // This is now handled by scte_parser.js, which initializes its own instance.
-    // SCTECoreParser will be used for all parsing needs.
+    // SCTECoreParser from scte_parser.js will be used for all parsing needs.
 
     // --- State Variables ---
     const state = {
-        scteDetections: [],
-        maxDetections: 50,
+        // scteDetections: [], // REMOVED - No longer keeping a list for UI
+        // maxDetections: 50,  // REMOVED
         active: false,
         cumulativeAdTime: 0,
-        knownProviders: {
-            'yospace': 'Yospace',
-            'freewheel': 'FreeWheel',
-            'google': 'Google Ad Manager',
-            'spotx': 'SpotX',
-            'tremorhub': 'Tremor Video',
-            'adease': 'Adease'
-        },
-        lastScteDetection: null,
-        lastScteDetectionsBatch: [] // Ensure this is initialized
+        lastScteDetection: null,       // Holds THE single most recent SCTE detection object
+        lastScteDetectionsBatch: []  // Still useful for API: all detections from the last segment event
     };
 
     // --- DOM Elements ---
     let scteContainer = null;
-    let scteStatusElement = null;
-    let scteListElement = null;
+    // let scteStatusElement = null; // Can be simplified or removed
+    let scteDisplayElement = null;   // Element to display the single latest SCTE event
     let adTimeElement = null;
 
     document.addEventListener('DOMContentLoaded', init);
 
     function init() {
         console.log('[scte_manager] DOM loaded, setting up SCTE detection');
-        scteContainer = document.getElementById('scteContainer');
-        scteStatusElement = document.getElementById('scteStatus');
-        scteListElement = document.getElementById('scteList');
+        scteContainer = document.getElementById('scteContainer'); // Main container for SCTE UI
+        scteDisplayElement = document.getElementById('scteDisplay'); // The div where the single SCTE event will be shown
         adTimeElement = document.getElementById('adTimeTracker');
+        // scteStatusElement = document.getElementById('scteStatus');
 
-        if (!scteContainer || !scteListElement) {
-            createScteUI();
+        if (!scteContainer || !scteDisplayElement) {
+            createScteUI(); 
             scteContainer = document.getElementById('scteContainer');
-            scteListElement = document.getElementById('scteList');
+            scteDisplayElement = document.getElementById('scteDisplay');
         }
-        scteStatusElement = document.getElementById('scteStatus'); // Re-check after UI creation
-        adTimeElement = document.getElementById('adTimeTracker');   // Re-check
+        // if (!scteStatusElement) scteStatusElement = document.getElementById('scteStatus');
 
         setupEventListeners();
-        updateScteStatusDisplay();
+        // updateScteStatusDisplay(); 
         updateAdTimeDisplay();
+        updateLatestScteDisplay(); // Initial (empty) display
         console.log('[scte_manager] Initialization complete');
     }
 
     function createScteUI() {
         const parentElement = document.querySelector('#inspect-tab');
         if (!parentElement) {
-            console.error('[scte_manager] Parent element for SCTE UI not found');
+            console.error('[scte_manager] Parent element for SCTE UI not found (#inspect-tab).');
             return;
         }
-        if (parentElement.querySelector('.scte-section')) {
-            console.log('[scte_manager] SCTE UI section already exists.');
-            return;
+        // Check for a more generic scte-section to avoid duplicate titles if UI is complex
+        let sectionElement = parentElement.querySelector('.scte-section');
+        if (!sectionElement) {
+            sectionElement = document.createElement('div');
+            sectionElement.className = 'scte-section';
+            sectionElement.innerHTML = `<div class="scte-header-label">SCTE Monitor:</div>`; // Your title
+            
+            const cacheTtlSection = parentElement.querySelector('.cache-ttl-section');
+            if (cacheTtlSection && cacheTtlSection.nextElementSibling) {
+                parentElement.insertBefore(sectionElement, cacheTtlSection.nextElementSibling);
+            } else {
+                parentElement.appendChild(sectionElement);
+            }
         }
-        const sectionElement = document.createElement('div');
-        sectionElement.className = 'scte-section';
-        sectionElement.innerHTML = `
-            <div class="scte-label">SCTE Monitor:</div>
-            <div id="scteContainer" class="scte-container">
-                <div id="scteList" class="scte-list"></div>
-            </div>
-        `;
-        const cacheTtlSection = document.querySelector('.cache-ttl-section');
-        if (cacheTtlSection && cacheTtlSection.nextElementSibling) {
-            parentElement.insertBefore(sectionElement, cacheTtlSection.nextElementSibling);
-        } else {
-            parentElement.appendChild(sectionElement);
+
+        // Ensure the display area exists within the scte-section
+        if (!sectionElement.querySelector('#scteDisplay')) {
+            const displayContainer = document.createElement('div');
+            displayContainer.id = 'scteContainer'; // Keep if styles depend on it
+            displayContainer.className = 'scte-container';
+            displayContainer.innerHTML = `<div id="scteDisplay" class="scte-list"></div>`; // Use 'scte-list' class if CSS expects it for the display area
+            sectionElement.appendChild(displayContainer);
         }
-        console.log('[scte_manager] SCTE UI section created.');
+        console.log('[scte_manager] SCTE UI structure ensured/created.');
     }
 
     function setupEventListeners() {
@@ -90,21 +85,18 @@ console.log('[scte_manager] Initializing...');
 
     function resetState() {
         console.log('[scte_manager] Resetting SCTE detection state');
-        state.scteDetections = [];
         state.active = false;
         state.cumulativeAdTime = 0;
         state.lastScteDetection = null;
         state.lastScteDetectionsBatch = [];
-        updateScteStatusDisplay();
+        // updateScteStatusDisplay();
         updateAdTimeDisplay();
-        updateScteList();
+        updateLatestScteDisplay(); // Clear the display
     }
 
     function handleSegmentAdded(event) {
         const segment = event.detail.segment || event.detail;
-        // console.log('[scte_manager] Received segment:', segment); // Too verbose for regular operation
         if (!segment || !segment.url) {
-            // console.warn('[scte_manager] handleSegmentAdded received event without segment or url:', event.detail);
             return;
         }
         processSegmentForScte(segment);
@@ -113,225 +105,112 @@ console.log('[scte_manager] Initializing...');
     function processSegmentForScte(segment) {
         if (!state.active) {
             state.active = true;
-            updateScteStatusDisplay();
+            // updateScteStatusDisplay();
         }
 
-        let detectionsMadeInThisCall = [];
+        let batchForThisSegment = []; // To populate state.lastScteDetectionsBatch
 
         if (segment.scteTagDataList && segment.scteTagDataList.length > 0) {
-            // console.log(`[scte_manager] Processing ${segment.scteTagDataList.length} SCTE tag(s) for segment: ${segment.url}`);
-
             window.LatestScteHexTags = window.LatestScteHexTags || [];
 
             segment.scteTagDataList.forEach((scteTagInfo, tagIndex) => {
-                const tagSpecificDetection = {
+                // This object will become state.lastScteDetection if it's the latest
+                const currentDetection = {
                     timestamp: new Date(),
-                    segmentInfo: {
-                        url: segment.url, sequence: segment.sequence, duration: segment.duration,
-                        playlistId: segment.playlistId
-                    },
-                    url: segment.url, // Redundant but kept for consistency with URL-based path
-                    info: {},
-                    type: 'unknown', // Will be updated by parser
-                    provider: detectProvider(segment.url)
+                    url: segment.url, 
+                    info: {}
                 };
 
-                let durationFromThisScteTag = null;
-                let idFromThisScteTag = null;
-                let typeFromThisScteTag = null; // Manager's classification like 'ad_start'
-                let scteProcessingResult = null;
+                let scteProcessingResult = null; // Holds data from scte_parser.js
 
+                // --- SCTE Parsing Logic (same as before) ---
                 if (scteTagInfo && scteTagInfo.encoded) {
-                    // console.log(`[debug] Captured SCTE data for tag[${tagIndex}]: ${scteTagInfo.encoded} (Type: ${scteTagInfo.encodingType})`);
-                    window.LatestScteHexTags.push({
-                        timestamp: new Date(), segmentUrl: segment.url,
-                        hexOrB64: scteTagInfo.encoded, encoding: scteTagInfo.encodingType, line: scteTagInfo.line
-                    });
-
-                    if (window.SCTECoreParser) {
+                    window.LatestScteHexTags.push({ /* ... */ });
+                    if (window.SCTECoreParser && window.SCTECoreParser.extractScteDetails) {
                         const comcastParsedScte = window.SCTECoreParser.parseScteData(scteTagInfo.encoded, scteTagInfo.encodingType);
-                        scteProcessingResult = window.SCTECoreParser.extractScteDetails(comcastParsedScte);
+                        scteProcessingResult = window.SCTECoreParser.extractScteDetails(comcastParsedScte, scteTagInfo.line);
                     } else {
-                        scteProcessingResult = { 
-                            error: 'SCTECoreParser not available.', 
-                            scteTagDetails: { 
-                                encoded: scteTagInfo.encoded, encodingType: scteTagInfo.encodingType, 
-                                summary: 'SCTECoreParser not available.', parsed: null 
-                            } 
+                        scteProcessingResult = { /* ... error object ... */
+                            error: 'SCTECoreParser unavailable.', id: 'N/A (Sys Error)', /* other fields as N/A */
+                            scteTagDetails: { summary: 'Parser unavailable.'} // simplified for brevity
                         };
                     }
                 } else {
-                    scteProcessingResult = { 
-                        error: 'Missing encoded SCTE data in scteTagInfo.', 
-                        scteTagDetails: { summary: 'Missing encoded SCTE data.', parsed: null } 
+                    scteProcessingResult = { /* ... error object for missing data ... */
+                        error: 'Missing encoded data.', id: 'N/A (No Data)', /* other fields as N/A */
+                        scteTagDetails: { summary: 'No encoded data.'} // simplified for brevity
                     };
                 }
+                // --- End SCTE Parsing Logic ---
 
-                if (scteProcessingResult && !scteProcessingResult.error) {
-                    tagSpecificDetection.info.scteTagDetails = scteProcessingResult.scteTagDetails;
-                    // scteProcessingResult.scteTagDetails.parsed contains the raw Comcast parser output
-                    // scteProcessingResult.scteTagDetails.summary contains the new summary
-
-                    idFromThisScteTag = scteProcessingResult.id;
-                    durationFromThisScteTag = scteProcessingResult.duration;
-                    typeFromThisScteTag = scteProcessingResult.type; // Manager's type ('ad_start', 'program_end', etc.)
-
-                    tagSpecificDetection.info.segmentationTypeId = scteProcessingResult.segmentationTypeId;
-                    // Store the descriptive SCTE-35 type name (e.g., "Provider Advertisement Start (Cancelled)")
-                    tagSpecificDetection.info.segmentationTypeIdName = scteProcessingResult.segmentationTypeIdName; 
-                    tagSpecificDetection.info.upidHex = scteProcessingResult.upid;
-
-                    // Convert UPID hex to ASCII using the new utility
-                    if (scteProcessingResult.upid && window.SCTECoreParser && window.SCTECoreParser.upidToAscii) {
-                        tagSpecificDetection.info.upidAscii = window.SCTECoreParser.upidToAscii(scteProcessingResult.upid);
-                    } else {
-                        tagSpecificDetection.info.upidAscii = null;
-                    }
-
-                    tagSpecificDetection.info.segmentNum = scteProcessingResult.segmentNum;
-                    tagSpecificDetection.info.segmentsExpected = scteProcessingResult.segmentsExpected;
-
-                    // console.log(`[scte_manager] Tag[${tagIndex}] UPID (Hex):`, scteProcessingResult.upid || 'N/A');
-                    // console.log(`[scte_manager] Tag[${tagIndex}] Segmentation Type:`, scteProcessingResult.segmentationTypeIdName || 'N/A');
-                } else {
-                    console.warn(`[scte_manager] SCTE processing failed for tag (idx ${tagIndex}) on segment ${segment.url}:`, scteProcessingResult?.error);
-                    tagSpecificDetection.info.scteTagDetails = scteProcessingResult.scteTagDetails || {
-                        encoded: scteTagInfo.encoded, parsed: null,
-                        summary: `SCTE Processing Error: ${scteProcessingResult?.error || 'Unknown error'}`,
-                        encodingType: scteTagInfo.encodingType, line: scteTagInfo.line,
-                        error: scteProcessingResult?.error || 'Processing failed'
-                    };
+                // Populate currentDetection.info with the processed data
+                currentDetection.info = scteProcessingResult || { error: "Processing failed unexpectedly", id: "N/A (Proc Error)", scteTagDetails: {summary:"Processing Error"}};
+                if (currentDetection.info.scteTagDetails && scteTagInfo.line && !currentDetection.info.scteTagDetails.line) {
+                    currentDetection.info.scteTagDetails.line = scteTagInfo.line;
                 }
 
-                tagSpecificDetection.duration = durationFromThisScteTag;
-                tagSpecificDetection.id = idFromThisScteTag;
-                tagSpecificDetection.type = typeFromThisScteTag || 'scte_signal';
+                // Log this specific detection
+                console.log(
+                    `[SCTE_MANAGER_DEBUG] RawLine: ${scteTagInfo.line || 'N/A'}`,
+                    `EventID: ${currentDetection.info.id || 'N/A'}`,
+                    `TypeID: 0x${(currentDetection.info.segmentationTypeId !== null && currentDetection.info.segmentationTypeId !== undefined ? Number(currentDetection.info.segmentationTypeId).toString(16).padStart(2, '0') : '??')}`,
+                    `TypeName: ${currentDetection.info.segmentationTypeIdName || 'N/A'}`,
+                    `isAdStart (Strict): ${currentDetection.info.isAdStart === true}`,
+                    `isAdEnd (Strict): ${currentDetection.info.isAdEnd === true}`,
+                    `Duration: ${currentDetection.info.duration === null || currentDetection.info.duration === undefined ? 'N/A' : currentDetection.info.duration.toFixed(3) + 's'}`,
+                    `DurationSrc: ${currentDetection.info.durationSource || 'N/A'}`,
+                    `UPID (Fmt): ${currentDetection.info.upidFormatted || 'N/A'}`,
+                    `Summary: ${currentDetection.info.scteTagDetails?.summary || 'N/A'}`
+                );
 
-                // Use isAdStart from the new parser results
-                const isAdStartForThisTag = scteProcessingResult && scteProcessingResult.isAdStart && tagSpecificDetection.duration > 0;
-                if (isAdStartForThisTag) {
-                    if (tagSpecificDetection.duration > 0) {
-                        console.log(`[scte_manager] Adding SCTE duration ${tagSpecificDetection.duration}s for ${tagSpecificDetection.type} (Tag ID: ${tagSpecificDetection.id || 'N/A'})`);
-                        state.cumulativeAdTime += tagSpecificDetection.duration;
-                    }
+                // Update state.lastScteDetection to this newest one
+                state.lastScteDetection = currentDetection;
+                batchForThisSegment.push(currentDetection); // Add to the batch for this segment
+
+                // Dispatch custom event if it's an ad start
+                if (currentDetection.info.isAdStart) {
+                    console.log(`[scte_manager] Dispatching 'scteAdSegmentDetected' (EventID: ${currentDetection.info.id})`);
+                    document.dispatchEvent(new CustomEvent('scteAdSegmentDetected', {
+                        detail: {
+                            segmentUrl: currentDetection.url,
+                            scteInfo: { 
+                                typeId: currentDetection.info.segmentationTypeId,
+                                typeName: currentDetection.info.segmentationTypeIdName,
+                                scteEventId: currentDetection.info.id,
+                                duration: currentDetection.info.duration
+                            }
+                        }
+                    }));
                 }
-                tagSpecificDetection.cumulativeAdTimeAfter = state.cumulativeAdTime;
-                detectionsMadeInThisCall.push(tagSpecificDetection);
-            });
 
-        } else if (segment.url.includes('/creatives/')) { // Legacy URL-based detection
-            // console.log(`[scte_manager] No SCTE tags. Processing URL for creatives: ${segment.url}`);
-            const urlDetection = {
-                timestamp: new Date(),
-                segmentInfo: {
-                    url: segment.url, sequence: segment.sequence, duration: segment.duration, playlistId: segment.playlistId,
-                    scteTagData: null
-                },
-                url: segment.url, info: {}, type: 'unknown', provider: detectProvider(segment.url)
-            };
-            const urlInfo = extractScteInfo(segment.url);
-            urlDetection.info.urlDetails = urlInfo;
-            if (urlInfo.duration) urlDetection.duration = urlInfo.duration;
-            if (urlInfo.id) urlDetection.id = urlInfo.id;
-            urlDetection.type = determineScteType(urlInfo, segment.url);
-
-            const isAdStartFromUrl = (urlDetection.type === 'ad_start') && urlDetection.duration > 0;
-            if (isAdStartFromUrl) {
-                if (urlDetection.duration > 0) {
-                    console.log(`[scte_manager] Adding URL duration ${urlDetection.duration}s for ${urlDetection.type} (URL ID: ${urlDetection.id || 'N/A'})`);
-                    state.cumulativeAdTime += urlDetection.duration;
+                // Ad Time Accumulation
+                const isStrictAdStartForTime = currentDetection.info.isAdStart &&
+                    typeof currentDetection.info.duration === 'number' &&
+                    currentDetection.info.duration > 0;
+                if (isStrictAdStartForTime) {
+                    state.cumulativeAdTime += currentDetection.info.duration;
                 }
-            }
-            urlDetection.cumulativeAdTimeAfter = state.cumulativeAdTime;
-            detectionsMadeInThisCall.push(urlDetection);
-        } else {
-            // console.log(`[scte_manager] No SCTE signals or creative URL pattern for segment: ${segment.url}`);
-        }
+                // No need for cumulativeAdTimeAfter on the detection object itself if only showing latest
 
-        if (detectionsMadeInThisCall.length > 0) {
-            detectionsMadeInThisCall.forEach(det => {
-                state.scteDetections.unshift(det);
-                document.dispatchEvent(new CustomEvent('scteSignalDetected', { detail: { detection: det } }));
-            });
-            while (state.scteDetections.length > state.maxDetections) {
-                state.scteDetections.pop();
-            }
-            state.lastScteDetection = detectionsMadeInThisCall[0]; // Most recent of this batch
-            state.lastScteDetectionsBatch = detectionsMadeInThisCall; // Entire batch from this segment
-            // console.log(`[scte_manager] Updated lastScteDetectionsBatch with ${detectionsMadeInThisCall.length} detection(s).`);
-            updateAdTimeDisplay();
-            updateScteList();
-        } else {
-            // console.log('[scte_manager] No SCTE tags processed in this segment; lastScteDetectionsBatch remains unchanged.');
-        }
-    }
+                // IMMEDIATELY UPDATE UI to show this very latest SCTE event
+                updateLatestScteDisplay(); 
+                updateAdTimeDisplay(); // Update ad time as it might have changed
 
-    function extractScteInfo(url) { // This is for URL based ad detection, not SCTE tag parsing
-        const info = { creative: 'Unknown', duration: null, id: null, params: {} };
-        try {
-            const creativesMatch = url.match(/\/creatives\/([^\/]+)/);
-            if (creativesMatch && creativesMatch[1]) info.creative = creativesMatch[1];
-            const durationMatch = url.match(/duration=(\d+(\.\d+)?)/);
-            if (durationMatch && durationMatch[1]) info.duration = parseFloat(durationMatch[1]);
-            const idMatch = url.match(/id=(\d+)/);
-            if (idMatch && idMatch[1]) info.id = idMatch[1];
-            const urlObj = new URL(url);
-            for (const [key, value] of urlObj.searchParams.entries()) {
-                info.params[key] = value;
-                if (!info.duration && (key.includes('dur') || key.includes('length')) && !isNaN(parseFloat(value))) info.duration = parseFloat(value);
-                if (!info.id && (key.includes('ad') && key.includes('id')) && value) info.id = value;
-            }
-            info.pathComponents = url.split('/').filter(Boolean);
-            if (url.includes('scte35')) {
-                const scte35Match = url.match(/scte35[=\/]([^&\/]+)/i);
-                if (scte35Match && scte35Match[1]) info.scte35Data = scte35Match[1];
-            }
-            const timeMatch = url.match(/[?&](time|timestamp|pts|start|end)=([^&]+)/i);
-            if (timeMatch && timeMatch[2]) info.timeMarker = timeMatch[2];
-        } catch (e) { /* console.warn('[scte_manager] Error parsing URL parameters:', e); */ }
-        return info;
-    }
+            }); // End forEach scteTagInfo
 
-    function detectProvider(url) {
-        let provider = { name: "Unknown", confidence: "low" };
-        try {
-            const urlObj = new URL(url);
-            const hostname = urlObj.hostname.toLowerCase();
-            const path = urlObj.pathname.toLowerCase();
-            const fullUrl = url.toLowerCase();
-            for (const [key, name] of Object.entries(state.knownProviders)) {
-                if (hostname.includes(key) || path.includes(key)) {
-                    provider.name = name; provider.confidence = "high"; return provider;
-                }
+            // After processing all tags in the segment, update the batch state
+            if (batchForThisSegment.length > 0) {
+                state.lastScteDetectionsBatch = batchForThisSegment;
             }
-            if (fullUrl.includes('yospace')) { provider.name = 'Yospace'; provider.confidence = "high"; }
-            else if (fullUrl.includes('freewheel')) { provider.name = 'FreeWheel'; provider.confidence = "high"; }
-            else if (hostname.includes('foxsports') || hostname.includes('fox.com') || hostname.includes('tubi.video')) { provider.name = 'Fox (Detected Hostname)'; provider.confidence = "medium"; }
-            else if (path.includes('/ads/') || path.includes('/ad/')) { provider.name = 'Generic Ad Server'; provider.confidence = "medium"; }
-        } catch (e) { /* console.warn('[scte_manager] Error detecting provider:', e); */ }
-        return provider;
-    }
 
-    function determineScteType(scteInfo, url) { // For URL based, not SCTE tags
-        if (url.includes('ad_start') || url.includes('cue_in') || url.includes('splice_in')) return 'ad_start';
-        else if (url.includes('ad_end') || url.includes('cue_out') || url.includes('splice_out')) return 'ad_end';
-        return 'ad_marker';
-    }
+        } // End if (segment.scteTagDataList)
+    } // End processSegmentForScte
 
+
+    // updateScteStatusDisplay can be simplified or removed if not used with the new single-item display
     function updateScteStatusDisplay() {
-        if (!scteStatusElement) return;
-        if (state.active) {
-            if (state.scteDetections.length > 0) {
-                scteStatusElement.textContent = `SCTE-35 signals detected: ${state.scteDetections.length}`;
-                scteStatusElement.className = 'scte-status scte-active';
-            } else {
-                scteStatusElement.textContent = 'Monitoring SCTE-35 signals';
-                scteStatusElement.className = 'scte-status';
-            }
-        } else {
-            scteStatusElement.textContent = 'Monitoring SCTE-35 signals';
-            scteStatusElement.className = 'scte-status';
-        }
+        // if (!scteStatusElement) return;
+        // scteStatusElement.textContent = state.active ? 'Monitoring SCTE...' : 'SCTE Monitor Inactive';
     }
 
     function updateAdTimeDisplay() {
@@ -343,297 +222,175 @@ console.log('[scte_manager] Initializing...');
     }
 
     function formatTime(seconds) {
+        if (seconds === null || seconds === undefined || isNaN(seconds)) seconds = 0;
         if (seconds === 0) return '0s';
+        if (seconds < 0) seconds = 0;
         if (seconds < 60) return `${seconds.toFixed(1)}s`;
         const minutes = Math.floor(seconds / 60);
         const remainingSeconds = (seconds % 60).toFixed(1);
         return `${minutes}m ${remainingSeconds}s`;
     }
 
-    function updateScteList() {
-        if (!scteListElement) return;
-        scteListElement.innerHTML = '';
-        if (state.scteDetections.length === 0) {
-            scteListElement.innerHTML = '<div class="scte-empty">No SCTE signals detected yet</div>';
+    // RENAMED and REFACTORED: Was updateScteList, now updates to show only the latest.
+    function updateLatestScteDisplay() {
+        if (!scteDisplayElement) {
+            // console.error("[scte_manager] updateLatestScteDisplay: scteDisplayElement is null!");
+            return;
+        }
+        
+        scteDisplayElement.innerHTML = ''; // Clear previous content
+
+        const detection = state.lastScteDetection; // Get the single latest detection
+
+        if (!detection || !detection.info) {
+            scteDisplayElement.innerHTML = '<div class="scte-empty">No SCTE signal processed yet.</div>';
             return;
         }
 
-        state.scteDetections.forEach((detection) => {
-            const detectionElement = document.createElement('div');
-            const isTagSource = !!detection.info?.scteTagDetails;
-            detectionElement.className = `scte-detection scte-${detection.type} ${isTagSource ? 'scte-source-tag' : 'scte-source-url'} expanded`;
-            
-            const time = detection.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            const primaryId = detection.id || detection.info?.urlDetails?.creative || 'N/A';
-            const displayTypeLabel = formatScteType(detection.type, detection.info); // Uses manager's 'type' and more specific info
+        const detInfo = detection.info; // This is the scteProcessingResult content
 
-            let detectionHtml = `
-                <div class="scte-detection-header">
-                    <span class="scte-detection-type">${displayTypeLabel}</span>
-                    <span class="scte-detection-time">${time}</span>
-                </div>
-                <div class="scte-detection-number">                    
-                    <span class="scte-primary-id">${primaryId}</span>
-                    <div class="scte-full-path" style="font-size: 0.8em; word-break: break-all; margin-top: 2px;">${detection.url}</div>
-                </div>
-                <div class="scte-detection-details">
-            `;
+        // Create a single div for this detection, using the same class for block styling
+        const detectionHtmlContainer = document.createElement('div');
+        detectionHtmlContainer.className = 'scte-detection'; // Use the class your CSS targets for blocks
 
-            if (isTagSource) {
-                const scteTag = detection.info.scteTagDetails;
-                detectionHtml += `
-                    <div class="scte-detail-item scte-tag-details">
-                        <span class="scte-detail-label">SCTE-35 Tag:</span>
-                        <div class="scte-detail-value">
-                           <div class="scte-tag-summary">${scteTag.summary || 'Could not parse tag.'}</div>
-                           <div class="scte-tag-encoded">Encoded (${scteTag.encodingType}): <code>${scteTag.encoded || 'N/A'}</code></div>
-                           <div class="scte-tag-line">Line: <code>${scteTag.line || 'N/A'}</code></div>
-                           <div class="scte-tag-parsed-raw" style="display: none;">Raw Parsed: <pre>${JSON.stringify(scteTag.parsed, null, 2)}</pre></div>
-                        </div>
-                    </div>`;
-                // Display SCTE-35 specific fields if available from tag
-                if (detection.info.segmentationTypeIdName) { // This is the descriptive SCTE-35 name
-                    detectionHtml += `
-                         <div class="scte-detail-item">
-                             <span class="scte-detail-label">Seg Type:</span>
-                             <span class="scte-detail-value">${detection.info.segmentationTypeIdName} (0x${(detection.info.segmentationTypeId !== null && detection.info.segmentationTypeId !== undefined) ? detection.info.segmentationTypeId.toString(16) : 'N/A'})</span>
-                         </div>`;
-                }
-
-                if (detection.info.upidHex) { // Check if upidHex exists
-                    detectionHtml += `
-                     <div class="scte-detail-item">
-                         <span class="scte-detail-label">UPID (Hex):</span>
-                         <span class="scte-detail-value">${detection.info.upidHex}</span>
-                     </div>`;
-                    if (detection.info.upidAscii) { // Display ASCII if available
-                        detectionHtml += `
-                         <div class="scte-detail-item">
-                             <span class="scte-detail-label">UPID (ASCII):</span>
-                             <span class="scte-detail-value">${detection.info.upidAscii}</span>
-                         </div>`;
-                    }
-                }
+        let typeIdNumber = 'N/A';
+        if (detInfo.segmentationTypeId !== null && detInfo.segmentationTypeId !== undefined) {
+            const parsedNum = parseInt(detInfo.segmentationTypeId, 10);
+            if (!isNaN(parsedNum)) {
+                typeIdNumber = parsedNum;
+            } else { 
+                const parsedHex = parseInt(detInfo.segmentationTypeId, 16);
+                typeIdNumber = isNaN(parsedHex) ? String(detInfo.segmentationTypeId) : parsedHex;
             }
-            
-            if (detection.provider && detection.provider.name !== "Unknown") {
-                detectionHtml += `
-                    <div class="scte-detail-item">
-                        <span class="scte-detail-label">Provider:</span>
-                        <span class="scte-detail-value">${detection.provider.name} (${detection.provider.confidence})</span>
-                    </div>`;
-            }
-            if (detection.id && !isTagSource) { // ID already covered by primaryId or seg type for tags
-                detectionHtml += `
-                    <div class="scte-detail-item">
-                        <span class="scte-detail-label">Extracted ID:</span>
-                        <span class="scte-detail-value">${detection.id}</span>
-                    </div>`;
-            }
-            if (detection.duration !== null && detection.duration !== undefined) {
-                const formattedDuration = detection.duration % 1 === 0 ? detection.duration.toFixed(0) : detection.duration.toFixed(3);
-                detectionHtml += `
-                    <div class="scte-detail-item">
-                        <span class="scte-detail-label">Duration:</span>
-                        <span class="scte-detail-value">${formattedDuration}s</span>
-                    </div>`;
-            }
-            if (detection.cumulativeAdTimeAfter !== null && detection.cumulativeAdTimeAfter !== undefined) {
-                detectionHtml += `
-                     <div class="scte-detail-item">
-                         <span class="scte-detail-label">Cum. Ad Time:</span>
-                         <span class="scte-detail-value">${formatTime(detection.cumulativeAdTimeAfter)}</span>
-                     </div>`;
-            }
-
-            // URL-specific details (only if not primarily a tag source, or if params exist)
-            if (detection.info?.urlDetails && (!isTagSource || Object.keys(detection.info.urlDetails.params).length > 0)) {
-                const urlDetails = detection.info.urlDetails;
-                 if (urlDetails.creative && urlDetails.creative !== 'Unknown' && urlDetails.creative !== detection.id) {
-                    detectionHtml += `<div class="scte-detail-item"><span class="scte-detail-label">Creative:</span><span class="scte-detail-value">${urlDetails.creative}</span></div>`;
-                }
-                if (urlDetails.params && Object.keys(urlDetails.params).length > 0) {
-                    detectionHtml += `<div class="scte-detail-item"><span class="scte-detail-label">URL Params:</span><div class="scte-detail-params">`;
-                    for (const [key, value] of Object.entries(urlDetails.params)) {
-                        detectionHtml += `<div class="scte-param"><span class="scte-param-key">${key}:</span><span class="scte-param-value">${value}</span></div>`;
-                    }
-                    detectionHtml += `</div></div>`;
-                }
-            }
-            detectionHtml += `
-                  <div class="scte-detail-item">
-                      <span class="scte-detail-label">Segment URL:</span>
-                      <span class="scte-detail-value scte-url-value">${detection.url}</span>
-                  </div>
-            </div>`; // Close details
-
-            detectionElement.innerHTML = detectionHtml;
-            const summaryElement = detectionElement.querySelector('.scte-tag-summary');
-            const rawParsedElement = detectionElement.querySelector('.scte-tag-parsed-raw');
-            if (summaryElement && rawParsedElement) {
-                summaryElement.style.cursor = 'pointer';
-                summaryElement.title = 'Click to toggle raw SCTE-35 parsed data';
-                summaryElement.addEventListener('click', (event) => {
-                    event.stopPropagation();
-                    rawParsedElement.style.display = rawParsedElement.style.display === 'none' ? 'block' : 'none';
-                });
-            }
-            scteListElement.appendChild(detectionElement);
-        });
-    }
-    
-    function formatScteType(type, info) { // type is manager's classification (ad_start etc)
-        if (info?.scteTagDetails) {
-            // Use the detailed segmentation type name if available, else the manager's type
-            const scteTypeName = info.segmentationTypeIdName || type;
-            return `${scteTypeName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} (Tag)`;
-        } else if (info?.urlDetails) {
-            return `${type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} (URL)`;
         }
-        return type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+        const segmentPath = detection.url || 'N/A';
+        const upidFormatted = detInfo.upidFormatted || 'N/A';
+        const eventId = detInfo.id || 'N/A';
+        const typeIdHex = (detInfo.segmentationTypeId !== null && detInfo.segmentationTypeId !== undefined)
+            ? `0x${Number(detInfo.segmentationTypeId).toString(16).padStart(2, '0')}`
+            : 'N/A';
+        const typeName = detInfo.segmentationTypeIdName || 'N/A';
+        const isAdStartText = detInfo.isAdStart === true ? 'true' : 'false';
+        const isAdEndText = detInfo.isAdEnd === true ? 'true' : 'false';
+
+        let dispatchInfo = 'Monitoring';
+        if (detInfo.isAdStart === true) {
+            dispatchInfo = `segment URL: ${segmentPath}`;
+        }
+
+        detectionHtmlContainer.innerHTML = `
+            <div class="scte-item-block"> 
+                <div class="scte-info-row">
+                    <span class="scte-label">SCTE Tag:</span>
+                    <span class="scte-value-label">${typeIdNumber}</span>
+                </div>
+                <div class="scte-info-row">
+                    <span class="scte-label">Segment Path:</span>
+                    <span class="scte-value-label scte-url-value">${segmentPath}</span>
+                </div>
+                <div class="scte-info-row">
+                    <span class="scte-label">UPID:</span>
+                    <span class="scte-value-label">${upidFormatted}</span>
+                </div>
+                <div class="scte-info-row scte-metadata-container">
+                    <span class="scte-label">Meta Data:</span>
+                    <div class="scte-metadata-details">
+                        <div class="scte-metadata-item">
+                            <span class="scte-metadata-key">EventID:</span> 
+                            <span class="scte-value-label">${eventId}</span>
+                        </div>
+                        <div class="scte-metadata-item">
+                            <span class="scte-metadata-key">TypeID:</span> 
+                            <span class="scte-value-label">${typeIdHex}</span>
+                        </div>
+                        <div class="scte-metadata-item">
+                            <span class="scte-metadata-key">TypeName:</span> 
+                            <span class="scte-value-label">${typeName}</span>
+                        </div>
+                        <div class="scte-metadata-item">
+                            <span class="scte-metadata-key">isAdStart:</span> 
+                            <span class="scte-value-label">${isAdStartText}</span>
+                        </div>
+                        <div class="scte-metadata-item">
+                            <span class="scte-metadata-key">isAdEnd:</span> 
+                            <span class="scte-value-label">${isAdEndText}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="scte-info-row">
+                    <span class="scte-label">Dispatch:</span>
+                    <span class="scte-value-label">${dispatchInfo}</span>
+                </div>
+            </div>
+        `;
+        scteDisplayElement.appendChild(detectionHtmlContainer);
+        // console.log(`[scte_manager] UI-UPDATE-LATEST: Displayed EventID: ${eventId}`);
     }
 
     window.SCTEManager = {
-        getState: () => ({ ...state }),
+        getState: () => ({ ...state, /* scteDetections is no longer relevant for UI list */ }),
         resetState,
-        analyzeUrl: (url) => extractScteInfo(url), // Keep for URL ad-hoc analysis
-        addProvider: (key, name) => { state.knownProviders[key.toLowerCase()] = name; },
-        getLastDetection: () => state.lastScteDetection, // Single most recent signal
-        getLastScteDetectionsBatch: () => state.lastScteDetectionsBatch, // All signals from last segment event
-
-        // Updated to reflect new parser's output stored in lastScteDetection.info.scteTagDetails.parsed
+        getLastDetection: () => state.lastScteDetection, // This is THE one displayed
+        getLastScteDetectionsBatch: () => state.lastScteDetectionsBatch, // Detections from last segment event
+        // ... other API functions remain the same, operating on lastScteDetection.info ...
         getLastDecodedScte: () => state.lastScteDetection?.info?.scteTagDetails?.parsed || null,
         getLastEncodedScte: () => state.lastScteDetection?.info?.scteTagDetails?.encoded || null,
-
-        // These might need adjustment based on what scteProcessingResult puts in lastScteDetection
-        getLastScteDuration: () => state.lastScteDetection?.duration || null,
-        getLastScteId: () => state.lastScteDetection?.id || null,
-        getLastScteType: () => state.lastScteDetection?.type || null, // manager's type (ad_start etc)
+        getLastScteDuration: () => state.lastScteDetection?.info?.duration || null,
+        getLastScteId: () => state.lastScteDetection?.info?.id || null,
+        getLastScteType: () => state.lastScteDetection?.info?.type || null,
         getCumulativeAdTime: () => state.cumulativeAdTime,
-
-        getScteCount: () => { // Count of SCTE *descriptors* in the last batch
-            const batch = state.lastScteDetectionsBatch;
-            if (!batch || batch.length === 0) return 0;
-            return batch.reduce((total, detection) => {
-                const parsedComcast = detection?.info?.scteTagDetails?.parsed;
-                return total + (parsedComcast?.descriptors?.length || 0);
-            }, 0);
-        },
-
-        // This should return info about descriptors in the *single* lastScteDetection
-        getLastScteDescriptorsInfo: () => { // Renamed from getLastScteDetection
-            const parsedComcast = state.lastScteDetection?.info?.scteTagDetails?.parsed;
-            if (!parsedComcast || !parsedComcast.descriptors) return [];
-            return parsedComcast.descriptors.map((d, idx) => ({
-                idx,
-                spliceDescriptorTag: d.spliceDescriptorTag,
-                // identifier: d.identifier, // "CUEI"
-                // descriptorLength: d.descriptorLength,
-                // You might want to add more specific fields depending on descriptor type
-                // For example, for segmentation_descriptor (tag 0x02):
-                segmentationEventId: d.segmentationEventId,
-                segmentationTypeId: d.segmentationTypeId,
-                // ... and so on, directly from the Comcast parser's descriptor object `d`
+        getScteCount: () => state.lastScteDetectionsBatch.reduce((total, detection) => total + (detection.info?.scteTagDetails?.parsed?.descriptors?.length || 0), 0),
+        getLastScteDescriptorsInfo: () => {
+            const parsedScte = state.lastScteDetection?.info?.scteTagDetails?.parsed;
+            if (!parsedScte || !parsedScte.descriptors) return [];
+            return parsedScte.descriptors.map((d, idx) => ({ 
+                idx, spliceDescriptorTag: d.spliceDescriptorTag, 
+                segmentationEventId: d.segmentationEventId, segmentationTypeId: d.segmentationTypeId,
             }));
         },
-        
-        getScteAdStart: () => { // Uses the manager's extracted `isAdStart` and `duration`
-            const last = state.lastScteDetection;
-            if (!last || !last.info?.scteTagDetails) return { found: false }; // Only from tags
-            
-            if (last.type === 'ad_start' && last.duration > 0) { // Check manager's classified type
-                 return {
-                    found: true,
-                    typeId: last.info.segmentationTypeId, // From extraction
-                    typeIdName: last.info.segmentationTypeIdName, // Descriptive name
-                    eventId: last.id, // Extracted ID
-                    durationSeconds: last.duration // Extracted duration
-                };
-            }
-            return { found: false };
+        getScteAdStart: () => {
+            const last = state.lastScteDetection; // Operates on the single latest SCTE event
+            if (!last || !last.info || !last.info.isAdStart) return { found: false };
+            return {
+                found: true, typeId: last.info.segmentationTypeId, typeIdName: last.info.segmentationTypeIdName,
+                eventId: last.info.id, durationSeconds: last.info.duration
+            };
         },
-
-        getScteAdEnd: () => { // Uses the manager's extracted `isAdEnd`
-            const last = state.lastScteDetection;
-            if (!last || !last.info?.scteTagDetails) return { found: false }; // Only from tags
-
-            if (last.type === 'ad_end') { // Check manager's classified type
-                return {
-                    found: true,
-                    typeId: last.info.segmentationTypeId,
-                    typeIdName: last.info.segmentationTypeIdName,
-                    eventId: last.id,
-                    durationSeconds: last.duration // May or may not be relevant for ad_end
-                };
-            }
-            return { found: false };
-        },      
-                
-        getLastDetectionAllScteTags: () => {
+        getScteAdEnd: () => {
+            const last = state.lastScteDetection; // Operates on the single latest SCTE event
+            if (!last || !last.info || !last.info.isAdEnd) return { found: false };
+            return {
+                found: true, typeId: last.info.segmentationTypeId, typeIdName: last.info.segmentationTypeIdName,
+                eventId: last.info.id, durationSeconds: last.info.duration 
+            };
+        },
+        getLastDetectionAllScteTags: () => { // This now refers to the last BATCH of tags from one segment
             const batch = state.lastScteDetectionsBatch;
             if (!batch || batch.length === 0) return null;
-    
             return batch.map((detection, idx) => {
-                if (!detection.info?.scteTagDetails) return { tagIndex: idx, error: "Not a tag-based detection" };
-    
-                // Accessing extracted info already on `detection.info` and `detection` itself
+                // ... (same mapping as before, using detection.info) ...
+                if (!detection.info || !detection.info.scteTagDetails) return { tagIndex: idx, error: "Not a tag-based detection" };
                 return {
-                    tagIndex: idx,
-                    upidHex: detection.info.upidHex || 'N/A',         // Existing
-                    upidAscii: detection.info.upidAscii || 'N/A',       // New
+                    tagIndex: idx, upidHex: detection.info.upidHex || 'N/A',
+                    upidFormatted: detection.info.upidFormatted || 'N/A', 
                     typeId: detection.info.segmentationTypeId,
-                    typeIdName: detection.info.segmentationTypeIdName || detection.type,
-                    eventId: detection.id || 'N/A',
+                    typeIdName: detection.info.segmentationTypeIdName || detection.info.type,
+                    eventId: detection.info.id || 'N/A',
                     descriptorCount: detection.info.scteTagDetails.parsed?.descriptors?.length || 0,
                     rawLine: detection.info.scteTagDetails.line || 'N/A',
                     summary: detection.info.scteTagDetails.summary || 'N/A'
                 };
             });
         },
-
-        getScteHex: () => { // Gets the original encoded hex string of the last single detection
-            const lastTagDetails = state.lastScteDetection?.info?.scteTagDetails;
-            if (lastTagDetails?.encodingType === 'hex') {
-                return lastTagDetails.encoded;
-            }
-            // If it was base64, SCTECoreParser would have converted it.
-            // To get the hex of a base64 original, we'd need to re-convert or store it.
-            // For now, assume we want the original if it was hex.
-            // parseLatestWithComcast will handle conversion if necessary.
-            if (lastTagDetails?.encodingType === 'base64' && window.SCTECoreParser && window.SCTECoreParser._b64ToHex) {
-                 // This _b64ToHex was an internal thought, not exposed.
-                 // Let parseLatestWithComcast handle it. For now, return original encoded.
-                 console.warn('[SCTEManager] getScteHex: last SCTE was base64, returning as is. parseLatestScte will handle conversion.');
-                 return lastTagDetails.encoded; // It will be a base64 string
-            }
-            return lastTagDetails?.encoded || null;
-        },
-    
+        getScteHex: () => state.lastScteDetection?.info?.scteTagDetails?.encoded || null,
         parseLatestScte: () => {
             const lastTagDetails = state.lastScteDetection?.info?.scteTagDetails;
-            if (!lastTagDetails || !lastTagDetails.encoded) {
-                console.warn('[SCTEManager] No SCTE data available in last detection to parse with Comcast.');
-                return null;
-            }
-            if (!window.SCTECoreParser) {
-                 console.error('[SCTEManager] SCTECoreParser is not available.');
-                 return { error: 'SCTECoreParser not available.'};
-            }
+            if (!lastTagDetails || !lastTagDetails.encoded) { return null; }
+            if (!window.SCTECoreParser || !window.SCTECoreParser.parseScteData) { return { error: 'SCTECoreParser not available.' }; }
             try {
-                // SCTECoreParser.parseScteData returns the direct output of the Comcast parser
-                // (plus originalEncoded/Type, which is fine)
-                const parsedResult = window.SCTECoreParser.parseScteData(lastTagDetails.encoded, lastTagDetails.encodingType);
-                
-                if (parsedResult.error && !parsedResult.tableId) { // If it's purely an error object from our wrapper
-                    console.error('[SCTEManager] Error parsing with SCTECoreParser for parseLatestScte:', parsedResult.error);
-                } else {
-                    console.log('[SCTEManager] Parsed SCTE-35 using SCTECoreParser (Comcast raw output):', parsedResult);
-                }
-                return parsedResult; // Return the raw Comcast parser output or our error object
-            } catch (e) {
-                console.error('[SCTEManager] Exception calling SCTECoreParser in parseLatestScte:', e);
-                return { error: `Exception: ${e.message}` };
-            }
+                return window.SCTECoreParser.parseScteData(lastTagDetails.encoded, lastTagDetails.encodingType);
+            } catch (e) { return { error: `Exception: ${e.message}` }; }
         }
     };
 

@@ -470,6 +470,8 @@ button#closeButton svg {
     text-transform: uppercase;
 }
 
+.segment-error       { background-color: #c03954; }
+
 .segment-master      { background-color: #848484; }
 .segment-adblock     { background-color: #2e8587; }
 

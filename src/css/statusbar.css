@@ -38,6 +38,7 @@
 
 /* If you ever need the CDN text to always be white, you can explicitly force it: */
 .status-bar .statusbar__cdn {
+	font-weight: bold;
 	color: #ffffff;
 }
 

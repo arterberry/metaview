@@ -13,7 +13,7 @@ const state = {
     updateInterval: 3000, // ms
     isLive: false,
     initialLoadComplete: false,
-    lastHttpStatus: null, //  Store the last HTTP status code
+    lastHttpStatus: null, // Updated: Stores an object { code, message, url, timestamp, error } or null
     targetDuration: null,
     hlsVersion: null
 };
@@ -102,7 +102,7 @@ function initHlsParser(initialUrl) { // Renamed 'url' to 'initialUrl'
 }
 
 // ---- Playlist Fetch ----
-async function fetchManifest(urlToFetch) { // Renamed 'url' to 'urlToFetch' to avoid confusion with response.url
+async function fetchManifest(urlToFetch) {
     console.log('[hls_parser] Fetching manifest:', getShortUrl(urlToFetch));
     let response = null;
     try {
@@ -118,28 +118,46 @@ async function fetchManifest(urlToFetch) { // Renamed 'url' to 'urlToFetch' to a
             cache: 'no-store'
         });
 
-        state.lastHttpStatus = response.status;
-        const finalUrlAfterRedirects = response.url; // This is the key URL
+        // *** UPDATED: Store detailed HTTP status object ***
+        state.lastHttpStatus = {
+            code: response.status,
+            message: response.statusText,
+            url: response.url, // Final URL after redirects
+            timestamp: Date.now(),
+            error: !response.ok
+        };
 
+        const finalUrlAfterRedirects = response.url;
         console.log(`[hls_parser] Request to ${getShortUrl(urlToFetch)}, Final URL after redirects: ${getShortUrl(finalUrlAfterRedirects)}, Status: ${response.status} ${response.statusText}`);
 
         if (!response.ok) {
+            // state.lastHttpStatus is already set with error details
             throw new Error(`HTTP error ${response.status}: ${response.statusText} for ${finalUrlAfterRedirects}`);
         }
         const text = await response.text();
         if (!text || !text.includes('#EXTM3U')) {
+            // Note: If this error occurs, state.lastHttpStatus reflects the HTTP status (e.g., 200 OK),
+            // which is correct for the "response status". This is a content validation error.
             throw new Error(`Invalid M3U8 content received from ${finalUrlAfterRedirects}`);
         }
-        return { content: text, finalUrl: finalUrlAfterRedirects }; // Return content AND the final URL
+        return { content: text, finalUrl: finalUrlAfterRedirects };
     } catch (error) {
-        if (!response) {
-            state.lastHttpStatus = null;
+        if (!response) { // Network error or fetch API internal error (e.g., CORS)
+             // *** UPDATED: Store detailed error object for network/fetch errors ***
+            state.lastHttpStatus = {
+                code: null, // No HTTP status code applicable
+                message: error.message || 'Network/CORS Error',
+                url: urlToFetch, // The URL we attempted to fetch
+                timestamp: Date.now(),
+                error: true
+            };
             console.error(`[hls_parser] Network or fetch error for ${getShortUrl(urlToFetch)}:`, error);
         } else {
-            // Log error with the URL that was attempted or resulted from redirect
-            console.error(`[hls_parser] Fetch error for ${getShortUrl(response.url || urlToFetch)}:`, error);
+            // If response exists, state.lastHttpStatus was already set with response.status and response.statusText.
+            // This log is for errors like !response.ok or issues after getting a response (e.g., .text() fails).
+            console.error(`[hls_parser] Fetch error for ${getShortUrl(response.url || urlToFetch)} (Status: ${state.lastHttpStatus?.code || response.status}):`, error);
         }
-        throw error;
+        throw error; // Re-throw to be handled by the caller
     }
 }
 
@@ -147,9 +165,6 @@ function isMasterPlaylist(content) {
     // More robust check
     return content.includes('#EXT-X-STREAM-INF') || content.includes('#EXT-X-I-FRAME-STREAM-INF');
 }
-
-// ---- Master Playlist Parsing ----
-// js/core/hls_parser.js
 
 // ---- Master Playlist Parsing ----
 function parseMasterPlaylist(masterContent, fetchedMasterUrl) {
@@ -161,37 +176,35 @@ function parseMasterPlaylist(masterContent, fetchedMasterUrl) {
     console.log(`[hls_parser] Found ${variants.length} variant streams.`);
     dispatchPlaylistParsed('master', { url: fetchedMasterUrl, content: masterContent, variants });
 
-    if (variants.length === 0) { /* ... */ return; }
+    if (variants.length === 0) { 
+        dispatchStatusUpdate("Master playlist has no variant streams.");
+        console.warn("[hls_parser] No variant streams found in master playlist.");
+        return; 
+    }
 
     const selectedVariant = variants[0];
     const mediaPlaylistUriFromMaster = selectedVariant.uri;
 
-    // 1. Primary Resolution against the URL master content was fetched from.
     let finalMediaPlaylistUrl = resolveUrl(mediaPlaylistUriFromMaster, fetchedMasterUrl);
     console.log(`[hls_parser] Initial resolved media playlist URL (from fetchedMasterUrl): ${getShortUrl(finalMediaPlaylistUrl)}`);
 
-    // Check if fetchedMasterUrl indicates a path-based token was already applied by CDN redirect
     const fetchedMasterUrlObj = new URL(fetchedMasterUrl);
-    const tokenPathRegex = /(\/[0-9a-f]{10,}_[0-9a-f]{10,}\/\*\~\/)/i; // Regex for your /TOKEN_PATH_COMPONENT/
+    const tokenPathRegex = /(\/[0-9a-f]{10,}_[0-9a-f]{10,}\/\*\~\/)/i;
     const masterPathHasTokenComponent = tokenPathRegex.test(fetchedMasterUrlObj.pathname);
 
     if (masterPathHasTokenComponent) {
         console.log(`[hls_parser] Detected path-based token in fetchedMasterUrl's path (${fetchedMasterUrlObj.pathname}). Assuming path token is sufficient.`);
-        // If finalMediaPlaylistUrl (after simple resolution) still has query params AND this CDN doesn't want them with path tokens, clear them.
-        // This is specific to Fastly behavior you described where path-tokenized URLs have NO query params.
         const tempUrlObj = new URL(finalMediaPlaylistUrl);
-        if (tempUrlObj.search) { // If there are any query params
-            // Check if these query params are from the original master URI or if they were part of mediaPlaylistUriFromMaster
-            if (!mediaPlaylistUriFromMaster.includes('?')) { // If media URI itself didn't have query params
+        if (tempUrlObj.search) {
+            if (!mediaPlaylistUriFromMaster.includes('?')) {
                 console.log(`[hls_parser] Clearing query parameters from media playlist URL as path token is present and media URI was clean: ${getShortUrl(finalMediaPlaylistUrl)}`);
-                tempUrlObj.search = ''; // Clear query string
+                tempUrlObj.search = '';
                 finalMediaPlaylistUrl = tempUrlObj.toString();
             } else {
                 console.log(`[hls_parser] Media URI from master ('${mediaPlaylistUriFromMaster}') had its own query params. Preserving them alongside path token.`);
             }
         }
     } else {
-        // 2. Secondary Step: Query String Token Propagation (if no path-based token detected in fetchedMasterUrl's path)
         console.log(`[hls_parser] No clear path-based token in fetchedMasterUrl. Attempting query string token propagation.`);
         try {
             const originalEntryPointUrlObj = new URL(state.masterUrl);
@@ -199,7 +212,6 @@ function parseMasterPlaylist(masterContent, fetchedMasterUrl) {
 
             if (originalEntryPointUrlObj.search &&
                 originalEntryPointUrlObj.hostname === currentMediaUrlObj.hostname) {
-                // ... (the rest of the query string propagation logic from the previous refactor) ...
                 const currentMediaParams = new URLSearchParams(currentMediaUrlObj.search);
                 let needsQueryParamTokens = true;
                 const commonTokenParams = ['hdnts', 'token', 'sig', 'signature', 'auth', 'exp', 'acl', 'hmac', 'Policy', 'Key-Pair-Id'];
@@ -227,8 +239,6 @@ function parseMasterPlaylist(masterContent, fetchedMasterUrl) {
     }
 
     const mediaPlaylistId = `variant_${selectedVariant.bandwidth || 0}_${selectedVariant.resolution || 'unknown'}`;
-    // ... (rest of the function remains the same, using finalMediaPlaylistUrl) ...
-    // e.g., fetchManifest(finalMediaPlaylistUrl).then(fetchResult => { ... use fetchResult.finalUrl ... })
     dispatchStatusUpdate(`Loading media playlist: ${getShortUrl(finalMediaPlaylistUrl)}`);
 
     dispatchSegmentAdded({
@@ -241,18 +251,15 @@ function parseMasterPlaylist(masterContent, fetchedMasterUrl) {
         codecs: selectedVariant.codecs
     });
 
-    // Fetch the media playlist using the final constructed URL
     fetchManifest(finalMediaPlaylistUrl)
-        .then(fetchResult => { // fetchResult is { content, finalUrl }
+        .then(fetchResult => {
             const mediaContent = fetchResult.content;
             const actualFetchedMediaUrl = fetchResult.finalUrl;
 
-            if (finalMediaPlaylistUrl !== actualFetchedMediaUrl && !actualFetchedMediaUrl.startsWith('blob:')) { // Ignore blob URL differences
+            if (finalMediaPlaylistUrl !== actualFetchedMediaUrl && !actualFetchedMediaUrl.startsWith('blob:')) {
                 console.warn(`[hls_parser] Media playlist URL used for fetch (${getShortUrl(finalMediaPlaylistUrl)}) differed from final URL after redirects (${getShortUrl(actualFetchedMediaUrl)}). Using final URL for state.`);
             }
-            // Prefer actualFetchedMediaUrl if it's not a blob URL, otherwise stick to finalMediaPlaylistUrl
             const urlForStateAndParsing = actualFetchedMediaUrl.startsWith('blob:') ? finalMediaPlaylistUrl : actualFetchedMediaUrl;
-
 
             state.mediaPlaylists[mediaPlaylistId] = {
                 url: urlForStateAndParsing,
@@ -287,19 +294,17 @@ function parseMasterPlaylist(masterContent, fetchedMasterUrl) {
 
 // ---- Media Playlist Direct Handling ----
 function handleDirectMediaPlaylist(content, url) {
-    const id = 'default_media'; // Simple ID for direct media playlist
+    const id = 'default_media';
 
-    // Update the original 'unknown' entry added by initHlsParser
     document.dispatchEvent(new CustomEvent('hlsUpdateSegmentType', {
         detail: { url: url, type: 'media', title: 'Media Playlist' }
     }));
 
     state.mediaPlaylists[id] = { url, content, segments: [] };
-    state.activeMediaPlaylistId = id; // Only one playlist in this case
+    state.activeMediaPlaylistId = id;
 
     parseMediaPlaylist(content, url, id);
 
-    // Check if live AFTER parsing segments
     if (!content.includes('#EXT-X-ENDLIST')) {
         state.isLive = true;
         dispatchStatusUpdate(`Live stream detected. Refreshing playlist every ${state.updateInterval / 1000}s`);
@@ -331,15 +336,13 @@ function extractVariantStreams(content) {
                 video: trimmedLine.match(/VIDEO="([^"]+)"/)?.[1],
                 subtitles: trimmedLine.match(/SUBTITLES="([^"]+)"/)?.[1],
                 closedCaptions: trimmedLine.match(/CLOSED-CAPTIONS="([^"]+)"/)?.[1],
-                uri: null // URI will be on the next line
+                uri: null
             };
         } else if (currentStreamInfo && trimmedLine && !trimmedLine.startsWith('#')) {
-            // This line should be the URI for the previous #EXT-X-STREAM-INF
             currentStreamInfo.uri = trimmedLine;
             streams.push(currentStreamInfo);
-            currentStreamInfo = null; // Reset for the next potential stream
+            currentStreamInfo = null;
         } else if (!trimmedLine.startsWith('#EXT-X-STREAM-INF:') && !trimmedLine.startsWith('#') && trimmedLine) {
-            // If we encounter a URI without a preceding STREAM-INF, reset
             currentStreamInfo = null;
         }
     }
@@ -350,62 +353,40 @@ function extractVariantStreams(content) {
 function parseMediaPlaylist(content, baseUrl, playlistId) {
     dispatchStatusUpdate(`Parsing media playlist: ${getShortUrl(baseUrl)}`);
 
-    // Validate content is a string before splitting
     if (typeof content !== 'string') {
         console.error(`[hls_parser] Invalid content type passed to parseMediaPlaylist for ${playlistId}. Expected string, got ${typeof content}.`);
-        // Optionally dispatch an error or return early
         dispatchStatusUpdate(`Error: Failed to parse playlist ${playlistId} due to invalid content.`);
-        return; // Stop processing if content isn't usable
+        return;
     }
 
     const lines = content.split('\n');
     const newSegments = [];
-    let currentSegment = null; // Holds the segment object being built (after EXTINF, before URI)
+    let currentSegment = null;
     let mediaSequence = parseInt(content.match(/#EXT-X-MEDIA-SEQUENCE:(\d+)/)?.[1], 10) || 0;
     let discontinuitySequence = parseInt(content.match(/#EXT-X-DISCONTINUITY-SEQUENCE:(\d+)/)?.[1], 10) || 0;
     let currentKey = null;
     let currentMap = null;
     let programDateTime = null;
     let nextSegmentHasDiscontinuity = false;
-    // let pendingScteTagData = null; // Holds SCTE tag data found *before* an EXTINF
-    let pendingScteTagDataList = []; // instead of pendingScteTagData = null
+    let pendingScteTagDataList = [];
 
 
     for (const lineRaw of lines) {
         const line = lineRaw.trim();
         if (!line) continue;
 
-        // --- SCTE Tag Processing ---
         if (line.includes('SCTE') || line.includes('CUE') || line.startsWith('#EXT-X-DATERANGE')) {
             let scteDataToStore = null;
-
-            // NEW LOGIC: Only extract raw encoded data here.
-            // scte_manager.js will handle the parsing using SCTECoreParser.
-            // This aligns with the goal of hls_parser just extracting HLS elements.
-
             let extractedRawScte = null;
-            let encodingType = null; // 'hex' or 'base64'
-
-            // Simple extraction for common SCTE tags like #EXT-X-SCTE35, #EXT-OATCLS-SCTE35, #EXT-X-CUE
-            // and #EXT-X-DATERANGE with SCTE35 attribute.
-            // This is a simplified version of what a full SCTE35Parser.extractFromHLSTags might do.
-            // A more robust regex or dedicated small utility could be used if complex tag formats are common.
-
+            let encodingType = null;
             let match;
+
             if ((match = line.match(/#(?:EXT-X-SCTE35|EXT-OATCLS-SCTE35|EXT-X-CUE):(.*)/i))) {
                 let sctePayload = match[1].trim();
-                // Check if it's likely base64 or hex.
-                // Base64 typically ends with '=' or has A-Z, a-z, 0-9, +, /
-                // Hex is 0-9, A-F, a-f and has an even length.
                 if (/^[A-Za-z0-9+/=]+$/.test(sctePayload) && (sctePayload.length % 4 === 0 || sctePayload.endsWith('='))) {
-                    // It's likely Base64, but could also be hex if it only contains 0-9, A-F.
-                    // A more robust check might be needed if ambiguity is high.
-                    // For now, assume if it looks like b64, it is.
-                    // Comcast parser can handle hex even if it looks like b64 chars, but prefers explicit type.
                     if (!/^[0-9A-Fa-f]+$/.test(sctePayload) || (sctePayload.length % 2 !== 0)) {
                          encodingType = 'base64';
                     } else {
-                        // Ambiguous: could be hex or base64 made of hex chars. Default to hex if it fits.
                         encodingType = 'hex';
                     }
                 } else if (/^[0-9A-Fa-f]+$/i.test(sctePayload) && sctePayload.length % 2 === 0) {
@@ -416,11 +397,9 @@ function parseMediaPlaylist(content, baseUrl, playlistId) {
                 if (encodingType) {
                     extractedRawScte = sctePayload;
                 }
-            } else if ((match = line.match(/#EXT-X-DATERANGE:.*SCTE35-CMD=(0x[0-9A-Fa-f]+)/i))) { // Regex updated for SCTE35-CMD and 0x
-                let sctePayloadWithPrefix = match[1].trim(); // This will be "0xFC3052..."
-                let sctePayload = sctePayloadWithPrefix.startsWith('0x') ? sctePayloadWithPrefix.substring(2) : sctePayloadWithPrefix; // Remove "0x"
-
-                // For SCTE35-CMD, the data is typically HEX.
+            } else if ((match = line.match(/#EXT-X-DATERANGE:.*SCTE35-CMD=(0x[0-9A-Fa-f]+)/i))) {
+                let sctePayloadWithPrefix = match[1].trim();
+                let sctePayload = sctePayloadWithPrefix.startsWith('0x') ? sctePayloadWithPrefix.substring(2) : sctePayloadWithPrefix;
                 if (/^[0-9A-Fa-f]+$/i.test(sctePayload) && sctePayload.length % 2 === 0) {
                     encodingType = 'hex';
                     extractedRawScte = sctePayload;
@@ -428,21 +407,18 @@ function parseMediaPlaylist(content, baseUrl, playlistId) {
                      console.warn(`[hls_parser] SCTE35-CMD payload for DATERANGE was not valid hex after removing '0x': ${sctePayload} in line: ${lineRaw}`);
                 }
             }
-            // Add other SCTE tag patterns here if needed (e.g., #EXT-X-CUE-OUT with raw data)
 
             if (extractedRawScte && encodingType) {
-                // console.log(`[hls_parser] Extracted raw SCTE data (type: ${encodingType}): ${extractedRawScte.substring(0,50)}...`);
                 scteDataToStore = {
-                    line: lineRaw, // Store raw line for reference
+                    line: lineRaw,
                     encoded: extractedRawScte,
                     encodingType: encodingType
                 };
-            } else if (line.includes('SCTE35-CMD') || line.includes('SCTE') || line.includes('CUE')) {// Log if keywords present but no extraction
+            } else if (line.includes('SCTE35-CMD') || line.includes('SCTE') || line.includes('CUE')) {
                 if (line.includes('SCTE35-CMD') || (!line.startsWith('#EXT-X-DATERANGE') && (line.includes('SCTE') || line.includes('CUE')))) {
                     console.log(`[hls_parser] Line contains SCTE/CUE keywords but no raw data extracted: ${lineRaw}.`);
                 }
             }
-
 
             if (scteDataToStore) {
                 if (currentSegment) {
@@ -450,48 +426,38 @@ function parseMediaPlaylist(content, baseUrl, playlistId) {
                         currentSegment.scteTagDataList = [];
                     }
                     currentSegment.scteTagDataList.push(scteDataToStore);
-                    // console.log(`[hls_parser] Attached SCTE tag directly to preceding segment ${currentSegment.id || currentSegment.sequence}`);
-                    pendingScteTagDataList = []; // Clear pending if attached directly
+                    pendingScteTagDataList = [];
                 } else {
                     pendingScteTagDataList.push(scteDataToStore);
-                    // console.log('[hls_parser] Stored SCTE tag data as pending for the next segment.');
                 }
-                continue; // Skip further checks for this line
+                continue;
             }
-        } // --- End SCTE Tag Processing ---
+        }
 
-        // --- Standard HLS Tag Processing ---
         if (line.startsWith('#EXTINF:')) {
-            // If we are starting a new segment, but there was pending SCTE data from *before* this EXTINF,
-            // it means that data wasn't attached to the previous segment (maybe because it was the first tag).
-            // We should probably keep it pending for *this* new segment being created now.
-            // The pendingScteTagData logic handles this implicitly (it's attached when the URI is found).
-
             const durationMatch = line.match(/#EXTINF:([\d.]+)/);
             const titleMatch = line.split(',')[1];
-            currentSegment = { // Create the new segment object
+            currentSegment = {
                 duration: durationMatch ? parseFloat(durationMatch[1]) : 0,
                 title: titleMatch ? titleMatch.trim() : '',
                 sequence: mediaSequence,
                 playlistId: playlistId,
                 tags: [],
-                programDateTime: programDateTime, // Apply most recent PDT
-                scteTagDataList: null // Initialize SCTE list for this segment
-                // Apply current encryption/map context if they exist
+                programDateTime: programDateTime,
+                scteTagDataList: null
             };
             if (currentKey) currentSegment.encryption = currentKey;
             if (currentMap) currentSegment.map = currentMap;
-            currentSegment.tags.push(lineRaw); // Add EXTINF line itself to tags
+            currentSegment.tags.push(lineRaw);
 
-            // Apply discontinuity flag if it was pending before this EXTINF
             if (nextSegmentHasDiscontinuity) {
                 currentSegment.discontinuity = true;
-                currentSegment.tags.push('#EXT-X-DISCONTINUITY'); // Add the conceptual tag
+                currentSegment.tags.push('#EXT-X-DISCONTINUITY');
                 nextSegmentHasDiscontinuity = false;
             }
 
         } else if (line.startsWith('#EXT-X-BYTERANGE:')) {
-            if (currentSegment) { // Add to the segment currently being built
+            if (currentSegment) {
                 const byteRangeMatch = line.match(/#EXT-X-BYTERANGE:(\d+)(?:@(\d+))?/);
                 if (byteRangeMatch) {
                     currentSegment.byteRange = {
@@ -500,32 +466,28 @@ function parseMediaPlaylist(content, baseUrl, playlistId) {
                     };
                     currentSegment.tags.push(lineRaw);
                 }
-            } // else: Ignore if not related to a current segment
+            }
 
         } else if (line.startsWith('#EXT-X-KEY:')) {
-            currentKey = { /* ... parse key attributes ... */ };
+            currentKey = {};
             currentKey.method = line.match(/METHOD=([^,]+)/)?.[1];
             currentKey.uri = line.match(/URI="([^"]+)"/)?.[1] ? resolveUrl(line.match(/URI="([^"]+)"/)[1], baseUrl) : null;
             currentKey.iv = line.match(/IV=([^,]+)/)?.[1];
             currentKey.keyformat = line.match(/KEYFORMAT="([^"]+)"/)?.[1];
             currentKey.keyformatversions = line.match(/KEYFORMATVERSIONS="([^"]+)"/)?.[1];
-
             if (currentSegment) {
-                currentSegment.encryption = currentKey; // Apply context to segment being built
-                currentSegment.tags.push(lineRaw);     // Add tag line to segment's tags
+                currentSegment.encryption = currentKey;
+                currentSegment.tags.push(lineRaw);
             }
-            // This key context persists for subsequent segments until changed
 
         } else if (line.startsWith('#EXT-X-MAP:')) {
-            currentMap = { /* ... parse map attributes ... */ };
+            currentMap = {};
             currentMap.uri = resolveUrl(line.match(/URI="([^"]+)"/)?.[1], baseUrl);
             currentMap.byterange = line.match(/BYTERANGE="([^"]+)"/)?.[1];
-
             if (currentSegment) {
-                currentSegment.map = currentMap;      // Apply context to segment being built
-                currentSegment.tags.push(lineRaw);     // Add tag line to segment's tags
+                currentSegment.map = currentMap;
+                currentSegment.tags.push(lineRaw);
             }
-            // This map context persists for subsequent segments until changed
 
         } else if (line.startsWith('#EXT-X-PROGRAM-DATE-TIME:')) {
             try {
@@ -534,126 +496,80 @@ function parseMediaPlaylist(content, baseUrl, playlistId) {
                 console.warn("Error parsing Program Date Time:", line, e);
                 programDateTime = null;
             }
-
             if (currentSegment) {
-                currentSegment.programDateTime = programDateTime; // Apply context to segment being built
-                currentSegment.tags.push(lineRaw);             // Add tag line to segment's tags
+                currentSegment.programDateTime = programDateTime;
+                currentSegment.tags.push(lineRaw);
             }
-            // This PDT context persists for subsequent segments until changed
 
         } else if (line === '#EXT-X-DISCONTINUITY') {
             console.log('[hls_parser] Found exact #EXT-X-DISCONTINUITY tag.');
             discontinuitySequence++;
-            if (currentSegment) { // If EXTINF already seen, apply to current segment
+            if (currentSegment) {
                 currentSegment.discontinuity = true;
                 currentSegment.tags.push(lineRaw);
-            } else { // If discontinuity comes before EXTINF, flag it for the next segment
+            } else {
                 nextSegmentHasDiscontinuity = true;
             }
 
         } else if (line.startsWith('#EXT-X-MEDIA-SEQUENCE:')) {
-            // Update mediaSequence if needed (though usually only parsed once at start)
             mediaSequence = parseInt(line.split(':')[1], 10) || mediaSequence;
-            // Don't add this tag to individual segments
-
         } else if (line.startsWith('#EXT-X-TARGETDURATION:')) {
             state.targetDuration = parseInt(line.split(':')[1], 10);
-            // Don't add this tag to individual segments
-
         } else if (line.startsWith('#EXT-X-VERSION:')) {
             state.hlsVersion = parseInt(line.split(':')[1], 10);
-            // Don't add this tag to individual segments
-
         } else if (line.startsWith('#EXT-X-ENDLIST')) {
             state.isLive = false;
             clearInterval(state.playlistRefreshInterval);
             state.playlistRefreshInterval = null;
             console.log('[hls_parser] Reached ENDLIST.');
             dispatchStatusUpdate("VOD stream finished loading.");
-            // Don't add this tag to individual segments
-            // Process any final pending segment before stopping
             if (currentSegment) {
                 console.warn("[hls_parser] Playlist ended unexpectedly after EXTINF but before segment URI for sequence", currentSegment.sequence);
-                // Decide whether to discard or dispatch the incomplete segment
-                currentSegment = null; // Discard incomplete segment at endlist
+                currentSegment = null;
             }
-
-
-            // --- Segment URI Processing ---
         } else if (currentSegment && !line.startsWith('#')) {
-            // This line is the segment URI, associated with the preceding EXTINF (currentSegment)
             currentSegment.url = resolveUrl(line, baseUrl);
             currentSegment.id = `${playlistId}_seq${currentSegment.sequence}`;
             currentSegment.filename = line.split('/').pop().split('?')[0];
 
-            // Attach any SCTE tag data that was found *before* this segment's EXTINF
-            // if (pendingScteTagData) {
-            //     // Ensure list exists
-            //     if (!currentSegment.scteTagDataList) {
-            //         currentSegment.scteTagDataList = [];
-            //     }
-            //     currentSegment.scteTagDataList.push(pendingScteTagData);
-            //     console.log(`[hls_parser] Attached PENDING SCTE tag data to segment ${currentSegment.id}`);
-            //     pendingScteTagData = null; // Clear pending data once attached
-            // }
             if (pendingScteTagDataList.length > 0) {
                 if (!currentSegment.scteTagDataList) {
                     currentSegment.scteTagDataList = [];
                 }
                 currentSegment.scteTagDataList.push(...pendingScteTagDataList);
                 console.log(`[hls_parser] Attached ${pendingScteTagDataList.length} pending SCTE tag(s) to segment ${currentSegment.id}`);
-                pendingScteTagDataList = []; // Reset after attaching
+                pendingScteTagDataList = [];
             }
             
-
-            // Add the fully formed segment to the list for this parse cycle
             newSegments.push(currentSegment);
-
-            // Dispatch event for this segment (UI / scte_manager listens)
             dispatchSegmentAdded(currentSegment);
 
-            // Dispatch discontinuity event if flagged
             if (currentSegment.discontinuity) {
                 console.log(`[hls_parser] Dispatching discontinuity for segment: ${currentSegment.id}`);
                 document.dispatchEvent(new CustomEvent('hlsDiscontinuityDetected', { detail: { segment: currentSegment } }));
             }
 
-            // Prepare for the next segment
             mediaSequence++;
-            currentSegment = null; // Reset currentSegment, ready for the next EXTINF
+            currentSegment = null;
 
         } else if (!currentSegment && !line.startsWith('#') && line.trim()) {
-            // Standalone segment URI without preceding EXTINF - non-standard.
             console.warn(`[hls_parser] Encountered standalone segment URI without #EXTINF: ${line}`);
-            // Discard any pending SCTE data as we can't reliably associate it
-            // pendingScteTagData = null;
             pendingScteTagDataList = [];
             nextSegmentHasDiscontinuity = false;
         }
-        // Implicitly ignore other unrecognized '#' tags
-    } // --- End loop through lines ---
+    }
 
-    // Handle any SCTE tag data that was pending at the very end (e.g., after last segment URI or after ENDLIST)
-    // if (pendingScteTagData) {
-    //     console.warn('[hls_parser] Playlist parsing ended with unattached pending SCTE tag data:', pendingScteTagData.line);
-    //     // Decide what to do: discard, or dispatch a playlist-level event? For now, discard.
-    //     pendingScteTagData = null;
-    // }
     if (pendingScteTagDataList.length > 0) {
         console.warn(`[hls_parser] Playlist parsing ended with ${pendingScteTagDataList.length} unattached pending SCTE tag(s):`);
         pendingScteTagDataList.forEach((tag, idx) => {
             console.warn(` - [${idx}] Line: ${tag.line}`);
         });
-        // Decide what to do: discard, or dispatch a playlist-level event? For now, discard.
         pendingScteTagDataList = [];
     }
 
-    // --- Update state.mediaPlaylists[playlistId].segments ---
     if (state.mediaPlaylists[playlistId]) {
         const existingSegments = state.mediaPlaylists[playlistId].segments;
         const lastExistingSeq = existingSegments.length > 0 ? existingSegments[existingSegments.length - 1].sequence : -1;
-
-        // Filter segments from *this parse cycle* to only include those newer than what's stored
         const trulyNewSegments = newSegments.filter(s => s.sequence > lastExistingSeq);
 
         if (trulyNewSegments.length > 0) {
@@ -665,12 +581,10 @@ function parseMediaPlaylist(content, baseUrl, playlistId) {
             console.log(`[hls_parser] No segments parsed in this update for playlist ${playlistId}.`);
         }
     } else {
-        // This should ideally not happen if the playlist was added before calling parseMediaPlaylist
         console.error(`[hls_parser] Playlist ID ${playlistId} not found in state when trying to add segments! Creating entry.`);
         state.mediaPlaylists[playlistId] = { url: baseUrl, content: content, segments: newSegments };
     }
 
-    // Calculate total unique segments encountered across all playlists
     const totalSegments = state.allSegments.filter(s => s.type !== 'master' && s.type !== 'media' && s.type !== 'unknown').length;
     dispatchStatusUpdate(`Parsed ${totalSegments} unique segments total.`);
 }
@@ -678,17 +592,12 @@ function parseMediaPlaylist(content, baseUrl, playlistId) {
 
 // ---- Playlist Refresh (Live) ----
 function startPlaylistRefresh(initialRefreshUrl, playlistId) {
-    // Clear any existing interval specifically for this playlistId if you were managing multiple.
-    // Since state.playlistRefreshInterval is singular, this clears any ongoing refresh.
     if (state.playlistRefreshInterval) {
         clearInterval(state.playlistRefreshInterval);
-        state.playlistRefreshInterval = null; // Important to nullify after clearing
+        state.playlistRefreshInterval = null;
         console.log('[hls_parser] Cleared existing refresh interval before starting new one.');
     }
 
-    // Determine refresh interval.
-    // HLS spec suggests half the target duration.
-    // We use 70% of target duration, or a default, ensuring it's at least 1 second.
     const refreshDelay = state.targetDuration
         ? Math.max(1000, state.targetDuration * 1000 * 0.7)
         : state.updateInterval;
@@ -703,7 +612,6 @@ function startPlaylistRefresh(initialRefreshUrl, playlistId) {
             return;
         }
 
-        // Check if the playlist still exists in our state (it might have been removed by a stream reset)
         const currentPlaylistInState = state.mediaPlaylists[playlistId];
         if (!currentPlaylistInState) {
             console.warn(`[hls_parser] Playlist ID: ${playlistId} no longer in state. Stopping its refresh cycle.`);
@@ -713,39 +621,27 @@ function startPlaylistRefresh(initialRefreshUrl, playlistId) {
         }
 
         try {
-            // Fetch the manifest. fetchManifest returns an object: { content: string, finalUrl: string }
-            const fetchResult = await fetchManifest(initialRefreshUrl); // Fetch using the URL passed to startPlaylistRefresh
-
+            const fetchResult = await fetchManifest(initialRefreshUrl);
             const newPlaylistString = fetchResult.content;
-            const actualFetchedUrl = fetchResult.finalUrl; // The URL the content was *actually* fetched from (after redirects)
+            const actualFetchedUrl = fetchResult.finalUrl;
 
-            // Log if the URL changed due to redirects during this refresh fetch
             if (initialRefreshUrl !== actualFetchedUrl && !actualFetchedUrl.startsWith('blob:')) {
                 console.log(`[hls_parser] Refresh URL for Playlist ID: ${playlistId} redirected: ${getShortUrl(initialRefreshUrl)} -> ${getShortUrl(actualFetchedUrl)}`);
             }
 
-            // Compare the new content with the currently stored content for this playlist
             if (currentPlaylistInState.content !== newPlaylistString) {
                 console.log(`[hls_parser] Playlist ID: ${playlistId} (fetched from ${getShortUrl(actualFetchedUrl)}) has updated content. Reparsing.`);
-
-                // Update the stored content string
                 currentPlaylistInState.content = newPlaylistString;
 
-                // CRITICAL: Update the stored URL for this playlist if it changed during this refresh.
-                // This ensures parseMediaPlaylist uses the correct baseUrl for resolving segment URIs if the playlist moved.
                 if (currentPlaylistInState.url !== actualFetchedUrl && !actualFetchedUrl.startsWith('blob:')) {
                     console.log(`[hls_parser] Updating stored URL for Playlist ID: ${playlistId} from ${getShortUrl(currentPlaylistInState.url)} to ${getShortUrl(actualFetchedUrl)}.`);
                     currentPlaylistInState.url = actualFetchedUrl;
                 }
 
-                // Parse the new playlist content.
-                // The baseUrl for parsing is the URL from which the content was actually fetched.
                 parseMediaPlaylist(newPlaylistString, actualFetchedUrl, playlistId);
-
-                // Dispatch an event indicating the media playlist was parsed/updated
                 dispatchPlaylistParsed('media', {
                     id: playlistId,
-                    url: actualFetchedUrl, // Report the URL it was fetched from
+                    url: actualFetchedUrl,
                     content: newPlaylistString
                 });
             } else {
@@ -754,29 +650,20 @@ function startPlaylistRefresh(initialRefreshUrl, playlistId) {
         } catch (err) {
             console.error(`[hls_parser] Error refreshing Playlist ID: ${playlistId} (attempted URL: ${getShortUrl(initialRefreshUrl)}):`, err);
             dispatchStatusUpdate(`Error refreshing playlist ${playlistId}: ${err.message}`);
-            // Optional: Implement more sophisticated error handling here, e.g.,
-            // - Stop refreshing after N consecutive errors.
-            // - Implement an exponential backoff for retries.
-            // For now, it will simply log the error and try again on the next interval.
         }
     }, refreshDelay);
 }
 
 // ---- Utility Functions ----
 function resolveUrl(relativeUrl, baseUrl) {
-    if (!relativeUrl || !baseUrl) return relativeUrl; // Nothing to resolve
-
-    // If relativeUrl is already absolute, return it directly
+    if (!relativeUrl || !baseUrl) return relativeUrl;
     if (/^(https?|blob|data):/i.test(relativeUrl)) {
         return relativeUrl;
     }
-
     try {
-        // Use URL constructor for robust resolution
         return new URL(relativeUrl, baseUrl).href;
     } catch (e) {
         console.warn(`[hls_parser] URL resolution failed for "${relativeUrl}" with base "${baseUrl}". Falling back. Error: ${e}`);
-        // Fallback for simpler cases (less reliable)
         const base = new URL(baseUrl);
         if (relativeUrl.startsWith('/')) {
             return `${base.origin}${relativeUrl}`;
@@ -796,9 +683,7 @@ function getShortUrl(url, maxLength = 50) {
         const file = pathParts.pop() || '';
         const domain = parsed.hostname;
         return `${domain}/.../${file.substring(0, 15)}${file.length > 15 ? '...' : ''}${parsed.search}`;
-
     } catch {
-        // Fallback if not a valid URL
         return url.substring(0, maxLength / 2) + '...' + url.substring(url.length - maxLength / 2);
     }
 }
@@ -807,19 +692,14 @@ function getShortUrl(url, maxLength = 50) {
 window.metaviewAPI = window.metaviewAPI || {};
 window.metaviewAPI.hlsparser = window.metaviewAPI.hlsparser || {};
 
-// ResponseStatus function
+// ResponseStatus function returns the new status object
 window.metaviewAPI.hlsparser.ResponseStatus = function () {
     return state.lastHttpStatus;
 };
 
-// Make the init function globally accessible (or use modules later)
 window.HlsParser = {
     init: initHlsParser,
-    getState: () => state, // Provide read-only access to state if needed elsewhere
-    // Expose parsing utilities? Not strictly needed for this refactor, but could be useful.
-    // resolveUrl: resolveUrl,
-    // getShortUrl: getShortUrl,
-    // extractVariantStreams: extractVariantStreams // Exposing internals might be too much
+    getState: () => state,
 };
 
 console.log('[hls_parser] Ready.');

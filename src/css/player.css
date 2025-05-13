@@ -460,7 +460,7 @@ button#closeButton svg {
 /* SEGMENT BADGES */
 
 .segment-badge {
-    background-color: #444;
+    background-color: #2ecc71;
     border-radius: 4px;
     color: #fff !important; 
     font-size: 10px;
@@ -470,9 +470,12 @@ button#closeButton svg {
     text-transform: uppercase;
 }
 
-.segment-live      { background-color: #2ecc71; }
+.segment-master      { background-color: #848484; }
+.segment-adblock     { background-color: #2e8587; }
+
+.segment-live      { background-color: #368155; }
 .segment-audio     { background-color: #3498db; }
-.segment-ad        { background-color: #77289c; }
+.segment-ad        { background-color: #9c283f; }
 .segment-playlist  { background-color: #9b59b6; }
 .segment-metadata  { background-color: #f39c12; }
 .segment-video     { background-color: #1abc9c; }

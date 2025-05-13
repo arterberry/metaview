@@ -80,8 +80,21 @@ console.log('[scte_manager] Initializing...');
     function setupEventListeners() {
         document.addEventListener('hlsSegmentAdded', handleSegmentAdded);
         document.addEventListener('hlsFragLoadedUI', handleSegmentAdded);
+        document.addEventListener('scteTagDetected', handleEarlyScteDetection);
         document.addEventListener('newStreamLoading', resetState);
     }
+
+    // Simple handler that passes directly to existing logic
+    function handleEarlyScteDetection(event) {
+        const segment = event.detail.segment;
+        if (!segment) {
+            console.warn('[scte_manager] Early SCTE detection event missing segment data');
+            return;
+        }
+        
+        console.log('[scte_manager] Processing early SCTE detection from: ' + segment.url);
+        processSegmentForScte(segment); // Use existing function without modifications
+    }    
 
     function resetState() {
         console.log('[scte_manager] Resetting SCTE detection state');
@@ -167,7 +180,7 @@ console.log('[scte_manager] Initializing...');
                 state.lastScteDetection = currentDetection;
                 batchForThisSegment.push(currentDetection); // Add to the batch for this segment
 
-                // Dispatch custom event if it's an ad start
+                // Dispatch custom event if it's an ad start to the segment_tags.js
                 if (currentDetection.info.isAdStart) {
                     console.log(`[scte_manager] Dispatching 'scteAdSegmentDetected' (EventID: ${currentDetection.info.id})`);
                     document.dispatchEvent(new CustomEvent('scteAdSegmentDetected', {
@@ -182,6 +195,19 @@ console.log('[scte_manager] Initializing...');
                         }
                     }));
                 }
+
+                // <<< --- ADD THIS BLOCK --- >>>
+                // Dispatch custom event if it's an ad end
+                if (currentDetection.info.isAdEnd) {
+                    console.log(`[scte_manager] Dispatching 'scteAdBlockEndDetected' (EventID: ${currentDetection.info.id})`);
+                    document.dispatchEvent(new CustomEvent('scteAdBlockEndDetected', {
+                        detail: {
+                             segmentUrl: currentDetection.url, // Pass URL for context if needed
+                             scteEventId: currentDetection.info.id
+                        }
+                    }));
+                }
+                // <<< --- END ADDED BLOCK --- >>>
 
                 // Ad Time Accumulation
                 const isStrictAdStartForTime = currentDetection.info.isAdStart &&

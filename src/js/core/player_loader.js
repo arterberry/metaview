@@ -148,7 +148,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         } else if (xhr && xhr.getAllResponseHeaders) {
                             try {
                                 const headerString = xhr.getAllResponseHeaders();
-                                
+
                                 const headers = parseHeaders(headerString);
 
                                 const parsedHeaders = parseHeaders(headerString);
@@ -212,8 +212,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // --- Configuration from old code ---
             debug: false, // Keep debug off by default, can be enabled if needed
             // loader: createCustomLoader(Hls), // Omit custom loader for now            
-            maxBufferLength: 60,
-            maxMaxBufferLength: 600,
+            maxBufferLength: 30,
+            maxMaxBufferLength: 60,
             maxBufferSize: 60 * 1000 * 1000, // 60MB
             maxBufferHole: 0.5,
             highBufferWatchdogPeriod: 3,
@@ -223,10 +223,13 @@ document.addEventListener('DOMContentLoaded', () => {
             abrEwmaFastLive: 3,
             abrEwmaSlowLive: 9,
             startLevel: -1, // Auto start level
-            manifestLoadingTimeOut: 64000, // reduce buffer timeout 25K min
+            manifestLoadingTimeOut: 8000, // reduce buffer timeout 25K min
             manifestLoadingMaxRetry: 4,
-            manifestLoadingRetryDelay: 1000,
-            manifestLoadingMaxRetryTimeout: 64000,
+            manifestLoadingRetryDelay: 100,
+            manifestLoadingMaxRetryTimeout: 8000,
+            liveSyncDurationCount: 1, // Use only 3 segments for live synchronization
+            liveMaxLatencyDurationCount: 10, // Maximum latency
+            liveDurationInfinity: true, // Keep loading new fragments
             // --- End of old config ---
 
             loader: HeaderCaptureLoader, // Use the new header capture loader
@@ -251,6 +254,69 @@ document.addEventListener('DOMContentLoaded', () => {
 
         hls.loadSource(hlsUrl);
         hls.attachMedia(video);
+
+        //**  NEW SCTE35 TAG HANDLER
+        // Listen for LEVEL_LOADED event to process SCTE35 tags
+        // This is where we will process the SCTE35 tags
+        // and dispatch them to the SCTE processor
+        // This is a simplified version of the SCTE35 tag processing
+        // and dispatching to the SCTE processor
+        // This is where we will process the SCTE35 tags
+        // and dispatch them to the SCTE processor
+        // This is a simplified version of the SCTE35 tag processing
+        // and dispatching to the SCTE processor
+
+        hls.on(Hls.Events.LEVEL_LOADED, function (event, data) {
+            if (data.details && data.details.fragments) {
+                // Process tags for each fragment
+                data.details.fragments.forEach(fragment => {
+                    if (fragment.tagList) {
+                        // Look for 'EXT-X-DATERANGE' tags with SCTE35-CMD
+                        fragment.tagList.forEach(tag => {
+                            if (tag[0] === 'EXT-X-DATERANGE' && tag[1] && tag[1].includes('SCTE35-CMD')) {
+                                // Extract the raw line that would normally be processed later
+                                const rawLine = `#EXT-X-DATERANGE:${tag[1]}`;
+
+                                // Create a synthetic scteTagData object
+                                const scteTagData = {
+                                    line: rawLine,
+                                    encoded: extractScte35CmdValue(tag[1]),
+                                    encodingType: 'base64'  // Or 'hex' depending on your stream format
+                                };
+
+                                // Dispatch directly to your SCTE processor
+                                dispatchScteTagData(scteTagData);
+                            }
+                        });
+                    }
+                });
+            }
+        });
+
+        function extractScte35CmdValue(tagContent) {
+            // Extract the base64/hex value after SCTE35-CMD=
+            const match = tagContent.match(/SCTE35-CMD=([^,]+)/);
+            if (match && match[1]) {
+                // Remove any quotes and the leading 0x if present
+                return match[1].replace(/^0x/, '').replace(/"/g, '');
+            }
+            return null;
+        }
+
+        function dispatchScteTagData(scteTagData) {
+            // Create a synthetic segment object with the SCTE data
+            const syntheticSegment = {
+                url: "m3u8://earlydetection",  // Placeholder URL
+                scteTagDataList: [scteTagData]
+            };
+
+            // Dispatch to your existing SCTE processor
+            document.dispatchEvent(new CustomEvent('scteTagDetected', {
+                detail: { segment: syntheticSegment }
+            }));
+        }
+
+        // --- END OF SCTE35 TAG HANDLER ---
 
         hls.on(Hls.Events.MANIFEST_LOADING, function (event, data) {
             console.log("[player_loader] HLS Event: Manifest loading:", data.url);

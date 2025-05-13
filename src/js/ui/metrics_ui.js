@@ -621,6 +621,8 @@ console.log('[metrics_ui] Initializing Metrics UI…');
         });
     }
 
+
+
     // -----------------------
     // CDN detection Logic
     // -----------------------
@@ -639,8 +641,6 @@ console.log('[metrics_ui] Initializing Metrics UI…');
         // 2. Initialization
         const u = url.toLowerCase();
         let cdn = 'Unknown'; // Start with Unknown
-        // Assuming qoeData and addEvent are available in the scope
-        // let currentCDN = qoeData.cdnProvider; // Get current CDN before detection
 
         // 3. Header Normalization (Case-Insensitive)
         const lowerCaseHeaders = {};
@@ -655,8 +655,14 @@ console.log('[metrics_ui] Initializing Metrics UI…');
         // Use a single if/else if chain to ensure only one CDN is detected via headers.
         // Order checks from most specific/reliable to less specific.
 
+        // Qwilt (specific headers like server or x-cdn)
+        // Added this block at higher priority
+        if (lowerCaseHeaders['server']?.toLowerCase() === 'qwilt' ||
+            lowerCaseHeaders['x-cdn']?.toLowerCase() === 'qwilt') {
+            cdn = 'Qwilt';
+        }
         // Cloudflare (very specific headers)
-        if (lowerCaseHeaders['cf-ray'] || lowerCaseHeaders['cf-cache-status'] || lowerCaseHeaders['server']?.toLowerCase().includes('cloudflare')) {
+        else if (lowerCaseHeaders['cf-ray'] || lowerCaseHeaders['cf-cache-status'] || lowerCaseHeaders['server']?.toLowerCase().includes('cloudflare')) {
             cdn = 'Cloudflare';
         }
         // Akamai (very specific headers first)
@@ -723,7 +729,7 @@ console.log('[metrics_ui] Initializing Metrics UI…');
             else if (u.includes('.cdnetworks.net') || u.includes('cdnetworks.com')) cdn = 'CDNetworks';
             else if (u.includes('.incapdns.net')) cdn = 'Imperva';
             else if (u.includes('.keycdn.com')) cdn = 'KeyCDN';
-            else if (u.includes('qwilt')) cdn = 'Qwilt'; // Domain might vary
+            else if (u.includes('qwilt')) cdn = 'Qwilt'; // Domain might vary - Qwilt URL fallback remains
             else if (u.includes('.jsdelivr.net')) cdn = 'jsDelivr';
             // Add other URL checks here...
         }
@@ -741,10 +747,29 @@ console.log('[metrics_ui] Initializing Metrics UI…');
                 // No need to call updateQoEDisplay here if FRAG_LOADED handles it
             } else if (cdn !== 'Unknown' && cdn === currentCDN) {
                 // Optional: Log if detection matches current state, useful for debugging repeated calls
-                console.log(`CDN reaffirmed: ${cdn}`);
-            } else if (cdn === 'Unknown') {
-                // Optional: Log if no CDN was detected
-                console.log(`CDN detection resulted in 'Unknown' for URL: ${url}`);
+                // console.log(`CDN reaffirmed: ${cdn}`); // Can be noisy, keep commented unless debugging this specifically
+            } else if (cdn === 'Unknown' && currentCDN !== 'Unknown') { // Log if we detect Unknown but previously knew a CDN
+                console.log(`CDN detection resulted in 'Unknown' for URL: ${url}, previously was: ${currentCDN}`);
+                // Optionally, decide if 'Unknown' should overwrite a known CDN.
+                // For now, it will if cdn ('Unknown') !== currentCDN.
+                // If we don't want 'Unknown' to overwrite a valid CDN, add:
+                // qoeData.cdnProvider = cdn; // only if cdn is not 'Unknown' or some other policy
+                // However, the current logic `if (cdn !== 'Unknown' && cdn !== currentCDN)` means
+                // 'Unknown' will only be set if currentCDN was something else AND 'Unknown' is not currentCDN
+                // which is always true if currentCDN was not 'Unknown'.
+                // If currentCDN is already 'Unknown', then `cdn !== currentCDN` is false.
+                // If cdn is 'Unknown' and currentCDN is 'Fastly', then it logs `CDN detected: Unknown (Previous: Fastly)`. This might be undesirable.
+                // Let's refine the update logic slightly: only update if the new CDN is not 'Unknown'.
+                // Or, if it is 'Unknown', only update if the previous one was also 'Unknown' (effectively no change) or handle explicitly.
+
+                // Revised update logic to prevent a known CDN from becoming 'Unknown' unless it's the very first detection.
+                // This change is outside the primary fix but good for robustness.
+                // The original problem is about flip-flopping between two known CDNs.
+                // The existing `if (cdn !== 'Unknown' && cdn !== currentCDN)` already handles not
+                // adding an event if the new cdn is 'Unknown' and current is already 'Unknown'.
+                // If new cdn is 'Unknown' and currentCDN is 'Fastly', it WILL update to 'Unknown' and log an event.
+                // This might be fine, indicating loss of CDN certainty.
+                // For now, the primary fix is the Qwilt header priority.
             }
         } else {
             console.warn("qoeData or addEvent not available in detectCDN scope.");
@@ -753,7 +778,6 @@ console.log('[metrics_ui] Initializing Metrics UI…');
         // Optional: Return the detected CDN name
         // return cdn;
     }
-
 
     // -----------------------
     // Update all UI pieces

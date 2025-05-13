@@ -8,11 +8,48 @@
     height: 250px;
 }
 
-.scte-label {
+.scte-header-label {
     font-weight: bold;
     margin-bottom: 5px;
     font-size: 12px;
+    margin-top: 25px;
+    margin-bottom: 15px;
+}
+
+.scte-label {
+    font-weight: bold;
+    margin-bottom: 5px;
+    margin-right: 8px;
+    font-size: 10px;
     color: #e0e0e0;
+    display: inline-block;
+}
+
+.scte-value-label {
+    font-weight: normal;
+    margin-bottom: 5px;
+    font-size: 10px;
+    color: #ffffff;
+    word-break: break-all;
+}
+
+.scte-info-row {
+    display: flex; 
+    align-items: flex-start; 
+    margin-bottom: 4px; 
+}
+
+.scte-metadata-details {
+    display: flex;
+    flex-direction: column; 
+    padding-left: 10px; 
+    flex-grow: 1; 
+}
+
+.scte-metadata-item {
+    display: flex; 
+    margin-bottom: 2px; 
+    font-size: 10px; 
 }
 
 .scte-container {    

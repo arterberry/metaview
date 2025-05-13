@@ -1,4 +1,4 @@
-# MetaView
+# MetaView Player
 
 MetaView is a Chrome extension for inspecting HLS video streams in real time. It provides:
 
@@ -7,13 +7,11 @@ MetaView is a Chrome extension for inspecting HLS video streams in real time. It
 * **Cache Metrics & TTL**: Track cache hit/miss ratio and TTL directives.
 * **Playback Metrics (QoS)**: Startup time, first-frame latency, rebuffering events, bitrate, resolution, audio tracks, etc.
 
-
 ---
 
 ## Prerequisites
 
 * **Google Chrome** (for extension)
-
 
 ---
 
@@ -22,8 +20,8 @@ MetaView is a Chrome extension for inspecting HLS video streams in real time. It
 1. Clone the repo:
 
    ```bash
-   git clone https://github.com/your-org/metaview.git
-   cd metaview
+   git clone git@github.com:fox-digitalvideo/metaviewplayer.git
+   cd metaviewplayer
    ```
 
 2. Run the build script:
@@ -37,9 +35,6 @@ MetaView is a Chrome extension for inspecting HLS video streams in real time. It
    * Clean and recreate `dist/`
    * Copy assets (`.js`, `.html`, `.css`, images, fonts, etc.) from `src/` into `dist/`
 
-
-
-
 ## Installing in Chrome
 
 1. Open **chrome://extensions** in your browser.
@@ -48,8 +43,6 @@ MetaView is a Chrome extension for inspecting HLS video streams in real time. It
 4. Pin the **MetaView** icon if desired.
 
 Once loaded, open any HLS stream page. Click the eye 🔍 icon to open the MetaView panel.
-
-
 
 ## UI Overview
 
@@ -67,8 +60,6 @@ Inside the side panel you’ll find three main tabs:
    * Details tabs: Audio, Subtitles, Connection, QoS.
    * Event history log.
 
-
-
 ## Internal JavaScript API
 
 MetaView exposes a global `window.metaviewAPI` namespace. Open DevTools (Inspect on the player) and use the following methods:
@@ -77,7 +68,7 @@ MetaView exposes a global `window.metaviewAPI` namespace. Open DevTools (Inspect
 // QoE state snapshot
 window.metaviewAPI.metrics.getQoEState()
 // Last HLS parser status codes or messages
-window.metaviewAPI.hlsparser.getResponseStatus()
+window.metaviewAPI.hlsparser.ResponseStatus()
 // Current playback bitrate (bps)
 window.metaviewAPI.metrics.getCurrentBitrate()
 // Current playback resolution ("WIDTHxHEIGHT")
@@ -152,4 +143,3 @@ jobs:
 ## License
 
 This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
-

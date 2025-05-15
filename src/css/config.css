@@ -1,76 +1,249 @@
-/* css/config.css */
+body.config-page-body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background-color: #4E4E4E;
+    color: #e0e0e0;
+    height: 150vh;
+    padding: 0px;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.config-container {
+    background-color: #4E4E4E;
+    padding: 0px;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    color: #e0e0e0;
+    display: flex;
+    flex-direction: column;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.config-title {
+    text-align: left;
+    color: #ffffff;
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 14px;
+    padding: 10px 15px;
+    padding-bottom: 10px;
+}
+
+.config-tabs {
+    display: flex;
+    margin-bottom: 1px;
+    padding-left: 10px;
+    padding-right: 10px;
+}
+
+.config-tab-button {
+    padding: 8px 12px;
+    background-color: #4E4E4E;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: #FFFFFF;
+    cursor: pointer;
+    font-size: 11px;
+    /* flex-grow: 1; */
+    text-align: center;
+    transition: background-color 0.2s, color 0.2s;
+    margin-bottom: 1px;
+}
+
+.config-tab-button:hover {
+    background-color: #363636;
+    color: #FFFFFF;
+}
+
+.config-tab-button.active {
+    background-color: #4E4E4E;
+    color: #FFFFFF;
+    font-weight: bold;
+    border-bottom: 2px solid #5cb85c;
+}
+
+.config-tab-content {
+    flex: 1;
+    background: #4E4E4E;
+    overflow-y: auto;
+    padding: 15px;
+}
+
+.config-tab-pane {
+    display: none;
+    padding: 10px 15px;
+    animation: fadeIn 0.3s;
+}
+
+.config-tab-pane.active {
+    display: block;
+}
+
+.config-tab-pane h2 {
+    color: #f0f0f0;
+    margin-top: 0;
+    font-size: 16px;
+    margin-bottom: 8px;
+}
+
+.config-tab-pane p {
+    font-size: 13px;
+    line-height: 1.5;
+    margin-bottom: 8px;
+}
+
+.config-tab-pane label {
+    display: block;
+    margin-bottom: 4px;
+    font-weight: bold;
+    color: #d0d0d0;
+    font-size: 13px;
+}
+
+.config-tab-pane input[type="text"],
+.config-tab-pane input[type="password"],
+.config-tab-pane textarea {
+    width: calc(100% - 22px);
+    padding: 6px 10px;
+    margin-bottom: 10px;
+    border: 1px solid #555;
+    background-color: #383838;
+    color: #e0e0e0;
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* Add these to your existing css/config.css */
+
+.config-instructions {
+    font-size: 12px;
+    color: #b0b0b0;
+    margin-bottom: 15px;
+    line-height: 1.4;
+}
+
+.config-input-group {
+    margin-bottom: 15px;
+}
+
+.config-label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 5px;
+    font-size: 12px;
+    color: #d0d0d0;
+}
+
+.config-input-field,
+.config-select-field {
+    width: 80%;
+    height: 32px;
+    padding: 0 10px; /* Adjusted padding for height */
+    margin-bottom: 5px;
+    border: 1px solid #555;
+    background-color: #383838;
+    color: #e0e0e0;
+    border-radius: 4px;
+    font-size: 13px;
+    box-sizing: border-box; /* Important for height and width */
+}
+
+.config-select-field {
+    /* Specific styling for select if needed, often inherits from input */
+    appearance: none; /* Optional: for custom dropdown arrow later */
+    background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23c0c0c0%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E');
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 10px 10px;
+    padding-right: 30px; /* Make space for arrow */
+}
+
+.config-status-message {
+    display: block;
+    font-size: 11px;
+    color: #8fdf8f; /* Light green for success */
+    min-height: 14px; /* Reserve space */
+    margin-top: 3px;
+}
 
 .config-section {
-    margin-top: 15px;
-    display: block;
-    width: 100%;
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px solid #5f5f5f;
 }
 
-.config-section label {
-    font-weight: bold;
-    font-size: 12px;
-    margin-bottom: 5px;
-}
-
-.config-section select {
-    width: 100%;
-    padding: 6px 8px;
+.config-section-title {
+    font-size: 14px;
+    color: #e0e0e0;
+    margin-top: 0;
     margin-bottom: 10px;
-    background-color: #2c2c2c;
-    border: 1px solid #555;
-    border-radius: 3px;
-    color: #fff;
 }
 
-.config-section input[type="password"] {
-    width: 95%;
-    padding: 6px 8px;
-    margin-bottom: 10px;
-    background-color: #2c2c2c;
-    border: 1px solid #555;
-    border-radius: 3px;
-    color: #fff;
+/* Ensure tab content scrolls if it gets too long */
+.config-tab-pane {
+    display: none;
+    padding: 15px; /* Increased padding for sections */
+    animation: fadeIn 0.3s;
+    overflow-y: auto; /* Allow individual panes to scroll */
+    height: calc(100% - 30px); /* Adjust based on padding, if parent has fixed height */
+    box-sizing: border-box;
 }
 
-.config-section select:focus,
-.config-section input:focus {
+.config-input-field:focus,
+.config-select-field:focus {
     outline: none;
-    border-color: #999;
+    border-color: #5cb85c; /* Change border color to green */
+    box-shadow: 0 0 0 2px rgba(92, 184, 92, 0.35); /* Change glow to green, adjust opacity (0.35) as desired */
 }
 
-.config-actions {
-    margin-bottom: 10px;
+.config-tab-pane .config-input-field:focus,
+.config-tab-pane .config-select-field:focus,
+.config-tab-pane input[type="text"]:focus,    /* Explicit for fallback/override */
+.config-tab-pane input[type="password"]:focus, /* Explicit for fallback/override */
+.config-tab-pane textarea:focus {             /* If you add textareas later */
+    outline: none;
+    border-color: #5cb85c;
+    box-shadow: 0 0 0 2px rgba(92, 184, 92, 0.35);
 }
 
-.save-btn {
-    background-color: #bff4bf;
-    color: #323232;
+.config-action-group {
+    margin-top: 15px; /* Space above the save button area */
+    display: flex;
+    align-items: center; /* Vertically align button and status message */
+    justify-content: flex-start; /* Left justify content */
+}
+
+.config-save-button {
+    padding: 8px 15px;
+    background-color: #5cb85c; /* Green background */
+    color: white;
     border: none;
-    padding: 8px 16px;
     border-radius: 4px;
     cursor: pointer;
+    font-size: 13px;
+    font-weight: bold;
+    transition: background-color 0.2s;
+    margin-right: 10px; /* Space between button and status message */
 }
 
-.save-btn:hover {
-    opacity: 0.9;
+.config-save-button:hover {
+    background-color: #4a934a; /* Darker green on hover */
 }
 
-.clear-btn {
-    background-color: #ccc;
-    color: #323232;
-    border: none;
-    padding: 8px 16px;
-    border-radius: 4px;
-    cursor: pointer;
-}
-
-.clear-btn:hover {
-    background-color: #bbb;
-}
-
-.config-divider {
-    border: none;
-    border-top: 1px solid #eee; 
-    margin-top: 25px;
-    margin-bottom: 25px;
+/* Adjust status message placement if needed */
+.config-status-message {
+    /* display: block; */ /* Already block from previous styles, fine */
+    font-size: 11px;
+    color: #8fdf8f;
+    min-height: 14px;
+    /* margin-top: 3px; */ /* May not be needed if flex aligns it */
 }

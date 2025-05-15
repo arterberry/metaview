@@ -1,0 +1,14 @@
+/* css/agent.css */
+
+#agent-tab.tab-pane { /* Be specific to ensure it targets the agent tab pane */
+    background-color: #4E4E4E;
+    height: 100%;
+}
+
+.agent-placeholder {
+    padding: 20px;
+    text-align: center;
+    color: #cccccc; /* Lighter placeholder text for better contrast on #4E4E4E */
+    font-style: italic;
+    font-size: 14px;
+}

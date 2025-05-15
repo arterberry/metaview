@@ -40,7 +40,7 @@
     
     "web_accessible_resources": [
         {
-            "resources": ["js/lib/hls.min.js", "player.html"],
+            "resources": ["js/lib/hls.min.js", "player.html", "config.html"],
             "matches": ["<all_urls>"]
         }
     ],

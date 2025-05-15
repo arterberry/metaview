@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MetaView Configuration</title>
+    <link rel="stylesheet" href="css/config.css">
+</head>
+
+<body class="config-page-body">
+    <div class="config-container">
+        <h1 class="config-title">MetaView Configuration</h1>
+        <div class="config-tabs">
+            <button class="config-tab-button active" data-tab="drm">DRM Authentication</button>
+            <button class="config-tab-button" data-tab="api">API Keys</button>
+            <button class="config-tab-button" data-tab="channels">Channels</button>
+        </div>
+        <div class="config-tab-content">
+            <div id="drm-tab" class="config-tab-pane active">
+                <h2>DRM Authentication Token</h2>
+                <div class="config-section">
+                    <p class="config-instructions">
+                        Provide a Bearer token for DRM license requests. This token will be added to the 'Authorization'
+                        header for streams requiring token-based authentication to access DRM licenses.
+                    </p>
+                    <div class="config-input-group">
+                        <label for="drmTokenInput" class="config-label">Bearer Token:</label>
+                        <input type="text" id="drmTokenInput" class="config-input-field" placeholder="Enter Bearer token">
+                    </div>
+                    <div class="config-action-group">
+                        <button id="saveDrmTokenButton" class="config-save-button">Save Token</button>
+                        <span id="drmTokenStatus" class="config-status-message"></span>
+                    </div>
+                </div>
+            </div>
+            <div id="api-tab" class="config-tab-pane">
+                <h2>API Keys</h2>
+                <div class="config-section">
+                    <p class="config-instructions">
+                        Select the LLM provider and enter your API key. This will be used for managing the Agent Analysis and provide detailed insights, per stream view.
+                    </p>
+                    <div class="config-input-group">
+                        <label for="llmProviderSelect" class="config-label">LLM Provider:</label>
+                        <select id="llmProviderSelect" class="config-select-field">
+                            <option value="">-- Select Provider --</option>
+                            <option value="anthropic">Anthropic</option>
+                            <option value="gemini">Gemini</option>
+                            <option value="mistral">Mistral</option>
+                            <option value="openai">OpenAI</option>
+                        </select>
+                    </div>
+                    <div class="config-input-group">
+                        <label for="llmApiKeyInput" class="config-label">API Key:</label>
+                        <input type="password" id="llmApiKeyInput" class="config-input-field" placeholder="Enter API Key">
+                    </div>
+                    <div class="config-action-group">
+                        <button id="saveLlmApiKeyButton" class="config-save-button">Save API Key</button>
+                        <span id="llmApiKeyStatus" class="config-status-message"></span>
+                    </div>
+                </div>
+            </div>
+            <div id="channels-tab" class="config-tab-pane">
+                <h2>Channels</h2>
+                <p>Configure preferred channels or sources [ IN PROGRESS ]</p>
+            </div>
+        </div>
+    </div>
+    <script defer src="js/ui/config_ui.js"></script>
+</body>
+
+</html>

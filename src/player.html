@@ -9,9 +9,10 @@
     <link rel="stylesheet" href="css/resolution_manager.css">
     <link rel="stylesheet" href="css/cache_manager.css">
     <link rel="stylesheet" href="css/scte_manager.css">
-    <!-- <link rel="stylesheet" href="css/config.css"> -->
+    <link rel="stylesheet" href="css/config.css"> 
     <link rel="stylesheet" href="css/qoe.css">
     <link rel="stylesheet" href="css/statusbar.css">
+    <link rel="stylesheet" href="css/agent.css">
 </head>
 
 <body>
@@ -80,7 +81,7 @@
                 <div class="tab-nav">
                     <button class="tab-button active" data-tab="inspect">Inspect</button>
                     <button class="tab-button" data-tab="qoe">Metrics</button>
-                    <!-- <button class="tab-button" data-tab="ai">AI</button> -->
+                    <button class="tab-button" data-tab="agent">Agent</button> 
                 </div>
 
                 <div class="tab-content">
@@ -237,9 +238,10 @@
                         </div>
                     </div>
 
-                    <!-- AI Tab -->
-                    <div class="tab-pane" id="ai-tab">
-                        <!-- AI analysis content goes here -->
+                    <!-- AGENT Tab -->
+                    <div class="tab-pane" id="agent-tab"> <!-- UPDATED ID and CONTENT for Agent -->
+                        <div class="agent-placeholder">Agent Analysis Interface [ IN PROGRESS ]</div>
+                        <!-- Future Agent UI will go here -->
                     </div>
                 </div>
             </div>
@@ -258,10 +260,10 @@
     <script defer src="js/ui/segment_tags.js"></script>
     <script defer src="js/ui/adblock_ui.js"></script>
     <script defer src="js/ui/manifest_ui.js"></script>
-    <!-- removed config_ui.js for now -->
     <script defer src="js/ui/metrics_ui.js"></script>
     <script defer src="js/core/player_loader.js"></script>
     <script defer src="js/ui/statusbar_manager.js"></script>
+    <script defer src="js/ui/agent_manager.js"></script>
 </body>
 
 </html>

@@ -2,6 +2,14 @@
 
 console.log('[hls_parser] Loading...');
 
+// JSON Web Token (JWT) decode library is expected to be available globally
+let jwt_decode_available = false;
+if (typeof jwt_decode === 'function') {
+    jwt_decode_available = true;
+} else {
+    console.warn('[hls_parser] jwt_decode function not found. DRM token claim logging will be limited. Please ensure the library is loaded.');
+}
+
 const state = {
     masterUrl: null,
     masterManifest: null,
@@ -15,8 +23,101 @@ const state = {
     initialLoadComplete: false,
     lastHttpStatus: null, // Updated: Stores an object { code, message, url, timestamp, error } or null
     targetDuration: null,
-    hlsVersion: null
+    hlsVersion: null,
+    drmAuthToken: null, // ADDED: Stores the user-provided bearer token
+    drmTokenDetailsLogged: false // ADDED: Flag to ensure token details are logged only once per token until it changes
 };
+
+/**
+ * Logs details of the provided DRM authentication token.
+ * This includes decoded claims like expiration (exp), audience (aud), and issuer (iss).
+ * It also warns if the token is expired.
+ * @param {string} tokenString The JWT token string.
+ */
+function logDrmTokenDetails(tokenString) {
+    if (!tokenString) {
+        console.log('[hls_parser:DRM] No DRM token provided to log.');
+        return;
+    }
+
+    console.log(`[hls_parser:DRM] User provided token. M3U8 URL: ${getShortUrl(state.masterUrl || 'N/A')}`);
+
+    if (!jwt_decode_available) {
+        console.warn('[hls_parser:DRM] Cannot decode token: jwt_decode library is not available.');
+        // Log basic info even if decode isn't available
+        console.log(`[hls_parser:DRM] Token (first 10 chars): ${tokenString.substring(0, 10)}...`);
+        dispatchStatusUpdate("DRM token set (decode unavailable).");
+        return;
+    }
+
+    try {
+        const decodedToken = jwt_decode(tokenString); // Use the globally available jwt_decode
+        const expirationTimestamp = decodedToken.exp;
+        const audience = decodedToken.aud;
+        const issuer = decodedToken.iss;
+        const currentTime = Math.floor(Date.now() / 1000); // Current time in seconds
+
+        console.log(`[hls_parser:DRM] Decoded Token - exp: ${expirationTimestamp} (${expirationTimestamp ? new Date(expirationTimestamp * 1000).toISOString() : 'N/A'}), aud: ${audience || 'N/A'}, iss: ${issuer || 'N/A'}. Current time: ${currentTime} (${new Date(currentTime * 1000).toISOString()}).`);
+
+        if (expirationTimestamp) {
+            if (currentTime > expirationTimestamp) {
+                console.warn(`[hls_parser:DRM] WARNING: User-provided token is EXPIRED. Expiration: ${new Date(expirationTimestamp * 1000).toISOString()}, Current: ${new Date(currentTime * 1000).toISOString()}.`);
+                dispatchStatusUpdate("Warning: Provided DRM token is EXPIRED.");
+            } else {
+                console.log("[hls_parser:DRM] User-provided token appears to be valid (not expired).");
+                dispatchStatusUpdate("DRM token validated (not expired).");
+            }
+        } else {
+            console.log("[hls_parser:DRM] Token does not have an 'exp' (expiration) claim.");
+            dispatchStatusUpdate("DRM token processed (no expiration claim).");
+        }
+        state.drmTokenDetailsLogged = true;
+    } catch (error) {
+        console.error('[hls_parser:DRM] Error decoding DRM token:', error.message);
+        console.log(`[hls_parser:DRM] Token (first 10 chars, failed to decode): ${tokenString.substring(0, 10)}...`);
+        dispatchStatusUpdate("Error: Could not decode provided DRM token.");
+        state.drmTokenDetailsLogged = false; // Allow re-attempt if problematic token is cleared and re-set
+    }
+}
+
+/**
+ * Sets the DRM authentication token.
+ * This function is intended to be called by the UI or other parts of the application
+ * when the user provides a token.
+ * @param {string | null} token The bearer token string, or null to clear.
+ */
+function setDrmAuthToken(token) {
+    const oldToken = state.drmAuthToken;
+    state.drmAuthToken = token ? String(token).trim() : null; // Ensure it's a string and trimmed, or null
+
+    // Reset log flag if token changes (even if new token is null)
+    if (state.drmAuthToken !== oldToken) {
+        state.drmTokenDetailsLogged = false;
+    }
+
+    if (state.drmAuthToken) {
+        console.log('[hls_parser:DRM] DRM Authentication Token has been set/updated.');
+        // logDrmTokenDetails will dispatch its own status updates
+        logDrmTokenDetails(state.drmAuthToken);
+    } else {
+        if (oldToken) { // Only log/dispatch if there was a token to clear
+            console.log('[hls_parser:DRM] DRM Authentication Token has been cleared.');
+            dispatchStatusUpdate("DRM token cleared.");
+        }
+    }
+    // Note: The actual use of this token (attaching to HLS.js license requests)
+    // needs to be handled by the HLS.js player setup logic, which should call
+    // getDrmAuthToken() to retrieve it.
+}
+
+/**
+ * Retrieves the currently set DRM authentication token.
+ * @returns {string | null} The bearer token string, or null if not set.
+ */
+function getDrmAuthToken() {
+    return state.drmAuthToken;
+}
+
 
 // ---- Event Dispatcher ----
 function dispatchStatusUpdate(message) {
@@ -49,6 +150,16 @@ function initHlsParser(initialUrl) { // Renamed 'url' to 'initialUrl'
     }
     state.masterUrl = initialUrl;
     dispatchStatusUpdate(`Loading manifest: ${getShortUrl(initialUrl)}`);
+
+    // ADDED: Log DRM token details if a token is already set and not yet logged for this token
+    if (state.drmAuthToken && !state.drmTokenDetailsLogged) {
+        console.log('[hls_parser:DRM] Initializing parser with a pre-set DRM token. Logging details...');
+        logDrmTokenDetails(state.drmAuthToken);
+    } else if (state.drmAuthToken && state.drmTokenDetailsLogged) {
+        console.log('[hls_parser:DRM] Initializing parser; DRM token already set and details previously logged.');
+    } else {
+        console.log('[hls_parser:DRM] Initializing parser; no DRM token currently set.');
+    }
 
     // Add the initial Master/Media playlist entry to the UI immediately
     // We guess the type first, and refine after fetching
@@ -696,6 +807,10 @@ window.metaviewAPI.hlsparser = window.metaviewAPI.hlsparser || {};
 window.metaviewAPI.hlsparser.ResponseStatus = function () {
     return state.lastHttpStatus;
 };
+
+// Expose DRM token functions
+window.metaviewAPI.hlsparser.setDrmAuthToken = setDrmAuthToken;
+window.metaviewAPI.hlsparser.getDrmAuthToken = getDrmAuthToken;
 
 window.HlsParser = {
     init: initHlsParser,

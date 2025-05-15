@@ -33,14 +33,19 @@
     "content_scripts": [
         {
             "matches": ["<all_urls>"],
-            "js": ["js/extension/content.js"],
+            "js": ["js/lib/jwt-decode.min.js", "js/extension/content.js" ],
             "run_at": "document_start"
         }
     ],
     
     "web_accessible_resources": [
         {
-            "resources": ["js/lib/hls.min.js", "player.html", "config.html"],
+            "resources": [
+                "js/lib/hls.min.js",
+                "player.html", 
+                "config.html",
+                "js/lib/jwt-decode.min.js"
+            ],
             "matches": ["<all_urls>"]
         }
     ],

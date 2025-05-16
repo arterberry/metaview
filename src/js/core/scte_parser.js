@@ -31,7 +31,46 @@ console.log('[scte_parser] Initialized SCTE parser core module.');
     function b64ToHex(b64String) { /* ... (same as before) ... */ try { const r = window.atob(b64String); let t = ""; for (let n = 0; n < r.length; n++) { const e = r.charCodeAt(n).toString(16); t += 2 === e.length ? e : "0" + e } return t.toUpperCase() } catch (r) { return console.error("[scte_parser] Error b64ToHex:", r), null } }
     function uint8ArrayToHex(uint8Array) { /* ... (same as before) ... */ if (!uint8Array) return null; return Array.from(uint8Array).map(r => r.toString(16).padStart(2, "0")).join("").toUpperCase() }
 
-    function getSegmentationTypeName(typeId) { /* ... (same as before) ... */ const o = { 0: "Not Indicated", 1: "Content Identification", 16: "Program Start", 17: "Program End", 18: "Program Early Termination", 19: "Program Breakaway", 20: "Program Resumption", 21: "Program Runover Planned", 22: "Program Runover Unplanned", 23: "Program Overlap Start", 24: "Program Blackout Override", 25: "Program Start - In Progress", 32: "Chapter Start", 33: "Chapter End", 34: "Break Start", 35: "Break End", 48: "Provider Advertisement Start", 49: "Provider Advertisement End", 50: "Distributor Advertisement Start", 51: "Distributor Advertisement End", 52: "Provider Placement Opportunity Start", 53: "Provider Placement Opportunity End", 54: "Distributor Placement Opportunity Start", 55: "Distributor Placement Opportunity End", 56: "Provider Overlay Placement Opportunity Start", 57: "Provider Overlay Placement Opportunity End", 58: "Distributor Overlay Placement Opportunity Start", 59: "Distributor Overlay Placement Opportunity End", 60: "Provider Promo Start [Fox Spec]", 61: "Provider Promo End [Fox Spec]", 62: "Distributor Promo Start [Fox Spec]", 63: "Distributor Promo End [Fox Spec]", 64: "Unscheduled Event Start", 65: "Unscheduled Event End", 80: "Network Start", 81: "Network End" }; return void 0 !== o[typeId] ? o[typeId] : `Unknown Type (0x${null === typeId || void 0 === typeId ? "N/A" : typeId.toString(16).padStart(2, "0")})` }
+    function getSegmentationTypeName(typeId) { 
+        const o = { 
+            0: "Not Indicated", 
+            1: "Content Identification", 
+            16: "Program Start", 
+            17: "Program End", 
+            18: "Program Early Termination", 
+            19: "Program Breakaway", 
+            20: "Program Resumption", 
+            21: "Program Runover Planned", 
+            22: "Program Runover Unplanned", 
+            23: "Program Overlap Start", 
+            24: "Program Blackout Override", 
+            25: "Program Start - In Progress", 
+            32: "Chapter Start", 
+            33: "Chapter End", 
+            34: "Break Start", 
+            35: "Break End", 
+            48: "Provider Advertisement Start", 
+            49: "Provider Advertisement End", 
+            50: "Distributor Advertisement Start", 
+            51: "Distributor Advertisement End", 
+            52: "Provider Placement Opportunity Start", 
+            53: "Provider Placement Opportunity End", 
+            54: "Distributor Placement Opportunity Start", 
+            55: "Distributor Placement Opportunity End", 
+            56: "Provider Overlay Placement Opportunity Start", 
+            57: "Provider Overlay Placement Opportunity End", 
+            58: "Distributor Overlay Placement Opportunity Start", 
+            59: "Distributor Overlay Placement Opportunity End", 
+            60: "Provider Promo Start [Fox Spec]", 
+            61: "Provider Promo End [Fox Spec]", 
+            62: "Distributor Promo Start [Fox Spec]", 
+            63: "Distributor Promo End [Fox Spec]", 
+            64: "Unscheduled Event Start", 
+            65: "Unscheduled Event End", 
+            80: "Network Start", 
+            81: "Network End"
+        }; return void 0 !== o[typeId] ? o[typeId] : `Unknown Type (0x${null === typeId || void 0 === typeId ? "N/A" : typeId.toString(16).padStart(2, "0")})` 
+    }
 
     // ***** REVISED for BUG 5 (Type 0x21 Chapter End isAdStart) *****
     function getScteTypeFromSegmentation(typeId, cancelIndicator) {

@@ -973,36 +973,38 @@ console.log('[hls_parser] API ready.');
 /*
 TEST CALLSHEET:
 
-window.metaviewAPI.hlsparser.init('YOUR_M3U8_URL_HERE');
 
-const fakeJwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.' +
-                'eyJ1c2VySWQiOiIxMjM0NTYiLCJyb2xlIjoiY29udHJpYnV0b3IiLCJleHAiOjE2NjAwMDAwMDB9.' +
-                'SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c';
+
+const fakeJwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.' + 'eyJ1c2VySWQiOiIxMjM0NTYiLCJyb2xlIjoiY29udHJpYnV0b3IiLCJleHAiOjE2NjAwMDAwMDB9.' + 'SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c';
 window.metaviewAPI.hlsparser.setDrmAuthToken(fakeJwt);                
 
-const validJwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.' +
-    'eyJ1c2VySWQiOiIxMjM0NTYiLCJyb2xlIjoiY29udHJpYnV0b3IiLCJleHAiOjIwMDAwMDAwMDB9.' +
-    'dummysignature1234567890';
+const validJwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.' + 'eyJ1c2VySWQiOiIxMjM0NTYiLCJyb2xlIjoiY29udHJpYnV0b3IiLCJleHAiOjIwMDAwMDAwMDB9.' + 'dummysignature1234567890';
 
 window.metaviewAPI.hlsparser.setDrmAuthToken(validJwt);
 window.metaviewAPI.hlsparser.setDrmAuthToken(null);
-
 window.metaviewAPI.hlsparser.getDrmAuthToken();
+
 window.metaviewAPI.hlsparser.getMasterPlaylistUrl();
-window.metaviewAPI.hlsparser.getMasterManifestContent();
+window.metaviewAPI.hlsparser.getMasterManifestContent(); //
 window.metaviewAPI.hlsparser.getMediaPlaylistDetails(); 
-window.metaviewAPI.hlsparser.getMediaPlaylistDetails('variant_...'); 
-window.metaviewAPI.hlsparser.getAllVariantStreams(); << IGNORE
+window.metaviewAPI.hlsparser.getAllVariantStreams(); //
 window.metaviewAPI.hlsparser.getHlsVersion();
 window.metaviewAPI.hlsparser.getTargetDuration();
 window.metaviewAPI.hlsparser.isLiveStream();
-window.metaviewAPI.hlsparser.getAllSegments();
-window.metaviewAPI.hlsparser.getSegmentByUrl('FULL_SEGMENT_URL_HERE');
-window.metaviewAPI.hlsparser.getSegmentById('PLAYLISTID_seqSEQUENCE');
-window.metaviewAPI.hlsparser.getInitializationSegment('variant_...');
+window.metaviewAPI.hlsparser.getAllSegments(); //
+
 window.metaviewAPI.hlsparser.getActiveMediaPlaylistId();
+window.metaviewAPI.hlsparser.getInitializationSegment('variant_5420800_1280x720');
+
 window.metaviewAPI.hlsparser.getLastHttpStatus();
 
-window.HlsParser.init('YOUR_M3U8_URL_HERE');
 window.HlsParser.getState();
+
+*/
+
+/*
+
+AI
+
+
 */

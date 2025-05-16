@@ -15,6 +15,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
     console.log('[player_loader] HLS URL:', hlsUrl);
 
+    // NEW: Module-scoped arrays to store collected data for API getters
+    let allCollectedHeaders = []; // Stores { url, headers, timestamp }
+    let allCacheStatuses = [];  // Stores { url, isHit, timestamp }
+    let allTtlInfos = [];       // Stores { url, ttlInfo, timestamp }
+    let allPlayerErrors = [];   // Stores { type, details, message, fatal, timestamp, urlContext }
+    let allEarlyScteDetections = []; // Stores { scteTagData, timestamp }
+    let currentHlsConfig = null; // To store the HLS config used
+
+    // Function to reset these arrays when a new stream starts
+    function resetCollectedData() {
+        allCollectedHeaders = [];
+        allCacheStatuses = [];
+        allTtlInfos = [];
+        allPlayerErrors = [];
+        allEarlyScteDetections = [];
+        currentHlsConfig = null;
+        console.log('[player_loader] Collected data arrays have been reset.');
+    }
+
+    // Listen to the newStreamLoading event (dispatched by this script) to reset data
+    document.addEventListener('newStreamLoading', resetCollectedData);    
+
     if (Hls.isSupported()) {
 
         // Helper function to parse header string (can be inside or outside the class)
@@ -125,9 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             return ttlInfo;
         }
-
         // --- END OF HEADER CAPTURE ADDITIONS ---
-
 
         // ---> ADD HEADER CAPTURE LOADER CLASS HERE <---
         class HeaderCaptureLoader extends Hls.DefaultConfig.loader {
@@ -135,54 +155,69 @@ document.addEventListener('DOMContentLoaded', () => {
                 super(config);
                 const load = this.load.bind(this);
                 this.load = function (context, config, callbacks) {
-                    // Store original callbacks
                     const originalOnSuccess = callbacks.onSuccess;
 
-                    // Override success callback
                     callbacks.onSuccess = function (response, stats, context, xhr) {
                         let cacheStatus = null;
                         let ttlInfo = null;
+                        let processedHeaders = {}; // Use one variable for the parsed headers
 
-                        if (context.type === 'level' || context.type === 'manifest' || context.type === 'audioTrack' || context.type === 'subtitleTrack') {
-                            console.log(`[HeaderCaptureLoader] Skipping header processing for type: ${context.type}`);
-                        } else if (xhr && xhr.getAllResponseHeaders) {
+                        // Only process headers for relevant types (e.g., segments)
+                        if (context.type !== 'level' &&
+                            context.type !== 'manifest' &&
+                            context.type !== 'audioTrack' &&
+                            context.type !== 'subtitleTrack' &&
+                            xhr && xhr.getAllResponseHeaders) {
                             try {
                                 const headerString = xhr.getAllResponseHeaders();
+                                processedHeaders = parseHeaders(headerString); // Parse headers ONCE
 
-                                const headers = parseHeaders(headerString);
+                                console.log(`[HeaderCaptureLoader] Headers received for ${getShortUrl(context.url)}:`, processedHeaders);
 
-                                const parsedHeaders = parseHeaders(headerString);
+                                // STORE collected headers for API
+                                allCollectedHeaders.push({
+                                    url: xhr.responseURL || context.url,
+                                    headers: { ...processedHeaders }, // Store a copy
+                                    timestamp: Date.now()
+                                });
 
+                                // Dispatch cdnInfoDetected with the parsed headers
                                 document.dispatchEvent(new CustomEvent('cdnInfoDetected', {
                                     detail: {
                                         url: xhr.responseURL || context.url,
-                                        headers: parsedHeaders
+                                        headers: { ...processedHeaders } // Send a copy
                                     }
                                 }));
 
-                                // ---> ADD DETAILED LOGGING <---
-                                console.log(`[HeaderCaptureLoader] Headers received for ${getShortUrl(context.url)}:`, headers);
-                                // ---> END LOGGING <---
+                                // Detect cache status using the parsed headers
+                                cacheStatus = detectCacheStatus(processedHeaders);
 
-                                cacheStatus = detectCacheStatus(headers);
-                                ttlInfo = extractTTLInfo(headers); // Extract TTL
+                                // Extract TTL info using the parsed headers
+                                ttlInfo = extractTTLInfo(processedHeaders);
 
-                                // ---> ADD TTL INFO LOGGING <---
                                 if (ttlInfo && ttlInfo.hasDirectives) {
                                     console.log("[HeaderCaptureLoader] TTL Info Extracted:", ttlInfo);
                                 } else if (ttlInfo) {
                                     console.log(`[HeaderCaptureLoader] No relevant TTL directives found in headers for ${getShortUrl(context.url)}.`);
                                 }
-                                // ---> END TTL LOGGING <---
 
                             } catch (e) {
                                 console.error('[HeaderCaptureLoader] Error processing headers:', e);
+                                // Ensure processedHeaders remains an empty object or is handled if error occurs mid-processing
+                                processedHeaders = {};
                             }
+                        } else {
+                            console.log(`[HeaderCaptureLoader] Skipping header processing for type: ${context.type} or XHR unavailable.`);
                         }
 
                         // Dispatch cache status event if found
                         if (cacheStatus !== null) {
-                            console.log(`[HeaderCaptureLoader] Dispatching cacheStatusDetected: ${cacheStatus}`); // Optional: uncomment for debug
+                            allCacheStatuses.push({ // Store for API
+                                url: xhr ? (xhr.responseURL || context.url) : context.url,
+                                isHit: cacheStatus,
+                                headers: { ...processedHeaders }, // Include context
+                                timestamp: Date.now()
+                            });
                             document.dispatchEvent(new CustomEvent('cacheStatusDetected', {
                                 detail: { isHit: cacheStatus }
                             }));
@@ -190,16 +225,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         // Dispatch TTL info event if relevant headers found
                         if (ttlInfo && ttlInfo.hasDirectives) {
-                            console.log("[HeaderCaptureLoader] Dispatching ttlInfoDetected."); // Optional: uncomment for debug
+                            allTtlInfos.push({ // Store for API
+                                url: xhr ? (xhr.responseURL || context.url) : context.url,
+                                ttlInfo: { ...ttlInfo },
+                                headers: { ...processedHeaders }, // Include context
+                                timestamp: Date.now()
+                            });
                             document.dispatchEvent(new CustomEvent('ttlInfoDetected', {
-                                detail: { ttlInfo: ttlInfo }
+                                detail: { ttlInfo: { ...ttlInfo } } // Send a copy
                             }));
                         }
 
-                        // Call original callback
                         originalOnSuccess(response, stats, context, xhr);
                     };
-                    // Call the original load method
                     load(context, config, callbacks);
                 };
             }
@@ -242,6 +280,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 xhr.setRequestHeader('Pragma', 'no-cache');
             },
         };
+
+        currentHlsConfig = { ...hlsConfig }; // Store the current config for API access
+        // Remove loader from the stored config if it's an issue for JSON stringification or display
+        if (currentHlsConfig.loader) delete currentHlsConfig.loader;
+
         console.log('[player_loader] HLS Config (with custom loader):', hlsConfig);
         const hls = new Hls(hlsConfig);
 
@@ -283,6 +326,13 @@ document.addEventListener('DOMContentLoaded', () => {
                                     encoded: extractScte35CmdValue(tag[1]),
                                     encodingType: 'base64'  // Or 'hex' depending on your stream format
                                 };
+
+                                // STORE early SCTE detection for API
+                                allEarlyScteDetections.push({
+                                    scteTagData: { ...scteTagData }, // Store a copy
+                                    timestamp: Date.now(),
+                                    levelUrl: data.details.url // Context of the level
+                                });
 
                                 // Dispatch directly to your SCTE processor
                                 dispatchScteTagData(scteTagData);
@@ -359,6 +409,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
             let errorMessage = `HLS Error: ${data.details || 'Unknown Details'}`;
             let errorObj = data.error || data.err; // Get primary error object if present
+            let urlContext = (data.context && data.context.url) ? data.context.url : (data.frag ? data.frag.url : null);
+
+            // STORE player error for API
+            allPlayerErrors.push({
+                type: data.type,
+                details: data.details,
+                message: errorMessage, // The formatted message
+                fatal: data.fatal,
+                urlContext: urlContext,
+                timestamp: Date.now(),
+                rawData: { ...data } // Store a copy of the raw error data, careful with circular refs
+            });
 
             // --- Add Specific Details Based on 'data.details' ---
             switch (data.details) {
@@ -565,6 +627,17 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('[player_loader] Native video error:', e);
             const error = video.error;
             // if (window.addPlayerLogEntry && error) window.addPlayerLogEntry(`Native Player Error: Code ${error.code}, ${error.message}`, true);
+            const errorMessage = error ? `Native Player Error: Code ${error.code}, ${error.message}` : 'Native Player Error: Unknown';
+
+            allPlayerErrors.push({
+                type: 'NativeMediaError',
+                details: error ? error.message : 'Unknown',
+                message: errorMessage,
+                fatal: true, // Assume native errors can be fatal for playback
+                urlContext: video.src,
+                timestamp: Date.now(),
+                rawData: error ? { code: error.code, message: error.message } : {}
+            });
         });
     } else {
         window.hlsPlayerInstance = null; // no HLS.js instance
@@ -595,3 +668,26 @@ function getRawSrcUrl() {
     console.log('[player_loader] Raw "src" from query:', raw);
     return raw || null;
 }
+
+// =====================================
+// === metaviewAPI PlayerLoader API ===
+// =====================================
+if (!window.metaviewAPI) window.metaviewAPI = {};
+window.metaviewAPI.playerloader = {
+    /**
+     * Returns the active HLS.js player instance, or null if not initialized or using native playback.
+     * @returns {object | null} The HLS.js instance or null.
+     */
+    getHlsInstance: function() {
+        return window.hlsPlayerInstance || null; 
+    }
+};
+
+console.log('[player_loader] API ready.');
+/*
+TEST CALL SHEET
+
+window.metaviewAPI.playerloader.getHlsInstance();
+
+
+*/

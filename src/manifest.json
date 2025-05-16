@@ -33,7 +33,7 @@
     "content_scripts": [
         {
             "matches": ["<all_urls>"],
-            "js": ["js/lib/jwt-decode.min.js", "js/extension/content.js" ],
+            "js": ["js/lib/jwt_decode.bundle.min.js", "js/extension/content.js" ],
             "run_at": "document_start"
         }
     ],
@@ -44,7 +44,7 @@
                 "js/lib/hls.min.js",
                 "player.html", 
                 "config.html",
-                "js/lib/jwt-decode.min.js"
+                "js/lib/jwt_decode.bundle.min.js"
             ],
             "matches": ["<all_urls>"]
         }

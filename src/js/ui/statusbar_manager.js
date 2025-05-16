@@ -48,7 +48,7 @@
     }
 
     function render() {
-        const statusInfo = window.metaviewAPI.hlsparser.ResponseStatus();
+        const statusInfo = window.metaviewAPI.hlsparser.getLastHttpStatus();;
         const formattedStatus = formatStatus(statusInfo);
         const cdn = window.metaviewAPI.metrics.getCDN() || 'Unknown';
         const bufferMsg = window.metaviewAPI.metrics.playbackBufferCheck();

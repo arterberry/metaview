@@ -1,71 +1,89 @@
 // js/ui/config_ui.js
+document.addEventListener('DOMContentLoaded', () => {
+    const tabButtons = document.querySelectorAll('.config-tab-button');
+    const tabPanes = document.querySelectorAll('.config-tab-pane');
 
-(function () {
-    const STORAGE_KEY = 'vidinfra_ai_key';
-    const STORAGE_PROVIDER = 'vidinfra_ai_provider';
+    const drmTokenInput = document.getElementById('drmTokenInput');
+    const drmTokenStatus = document.getElementById('drmTokenStatus');
+    const saveDrmTokenButton = document.getElementById('saveDrmTokenButton');
 
-    document.addEventListener('DOMContentLoaded', () => {
-        // 1) Add "Config" tab button
-        const tabNav = document.querySelector('.tab-nav');
-        if (tabNav) {
-            const btn = document.createElement('button');
-            btn.className = 'tab-button';
-            btn.setAttribute('data-tab', 'config');
-            btn.textContent = 'Config';
-            tabNav.appendChild(btn);
-        }
+    const llmProviderSelect = document.getElementById('llmProviderSelect');
+    const llmApiKeyInput = document.getElementById('llmApiKeyInput');
+    const llmApiKeyStatus = document.getElementById('llmApiKeyStatus');
+    const saveLlmApiKeyButton = document.getElementById('saveLlmApiKeyButton');
 
-        // 2) Add Config tab pane
-        const tabContent = document.querySelector('.tab-content');
-        if (tabContent) {
-            const pane = document.createElement('div');
-            pane.className = 'tab-pane';
-            pane.id = 'config-tab';
-            pane.innerHTML = `
-          <div class="config-section">
-            <label for="providerSelect">Add your LLM API Key</label>
-            <select id="providerSelect">
-              <option value="openai">OpenAI</option>
-              <option value="gemini">Gemini</option>
-              <option value="anthropic">Anthropic</option>
-              <option value="mistral">Mistral</option>
-            </select>
-  
-            <input type="password" id="apiKeyInput" placeholder="AI API Key" />
-  
-            <div class="config-actions">
-              <button id="saveKeyBtn" class="save-btn">Save</button>
-              <button id="clearKeyBtn" class="clear-btn">Clear Key</button>
-            </div>
-  
-            <hr class="config-divider" />
-          </div>
-        `;
-            tabContent.appendChild(pane);
-        }
-
-        // 3) Load stored values
-        chrome.storage.local.get([STORAGE_KEY, STORAGE_PROVIDER], ({ [STORAGE_KEY]: key, [STORAGE_PROVIDER]: prov }) => {
-            if (prov) document.getElementById('providerSelect').value = prov;
-            if (key) document.getElementById('apiKeyInput').value = key;
-        });
-
-        // 4) Save handler
-        document.getElementById('saveKeyBtn').addEventListener('click', () => {
-            const key = document.getElementById('apiKeyInput').value;
-            const provider = document.getElementById('providerSelect').value;
-            chrome.storage.local.set({ [STORAGE_KEY]: key, [STORAGE_PROVIDER]: provider }, () => {
-                // Optional: give feedback
-                console.log('AI key & provider saved');
+    if (tabButtons.length > 0 && tabPanes.length > 0) {
+        tabButtons.forEach(button => {
+            button.addEventListener('click', (event) => {
+                tabButtons.forEach(btn => btn.classList.remove('active'));
+                tabPanes.forEach(pane => pane.classList.remove('active'));
+                event.currentTarget.classList.add('active');
+                const targetTabValue = event.currentTarget.getAttribute('data-tab');
+                const targetPaneElement = document.getElementById(targetTabValue + '-tab');
+                if (targetPaneElement) {
+                    targetPaneElement.classList.add('active');
+                }
             });
         });
+    } else {
+        return;
+    }
 
-        // 5) Clear handler
-        document.getElementById('clearKeyBtn').addEventListener('click', () => {
-            chrome.storage.local.remove(STORAGE_KEY, () => {
-                document.getElementById('apiKeyInput').value = '';
-                console.log('AI key cleared');
+    function showStatusMessage(element, message, isError = false, duration = 2500) {
+        if (element) {
+            element.textContent = message;
+            element.style.color = isError ? '#e1a598' : '#8fdf8f'; // Red for error, green for success
+            setTimeout(() => {
+                element.textContent = '';
+            }, duration);
+        }
+    }
+
+    if (drmTokenInput && drmTokenStatus && saveDrmTokenButton) {
+        chrome.storage.local.get(['drmAuthToken'], (result) => {
+            if (result.drmAuthToken) {
+                drmTokenInput.value = result.drmAuthToken;
+            }
+        });
+
+        saveDrmTokenButton.addEventListener('click', () => {
+            const token = drmTokenInput.value.trim();
+            if (token) {
+                chrome.storage.local.set({ drmAuthToken: token }, () => {
+                    showStatusMessage(drmTokenStatus, 'Token saved!');
+                });
+            } else {
+                showStatusMessage(drmTokenStatus, 'Token cannot be empty.', true);
+            }
+        });
+    }
+
+    if (llmProviderSelect && llmApiKeyInput && llmApiKeyStatus && saveLlmApiKeyButton) {
+        chrome.storage.local.get(['selectedLLMProvider', 'llmApiKey'], (result) => {
+            if (result.selectedLLMProvider) {
+                llmProviderSelect.value = result.selectedLLMProvider;
+            }
+            if (result.llmApiKey) {
+                llmApiKeyInput.value = result.llmApiKey;
+            }
+        });
+
+        saveLlmApiKeyButton.addEventListener('click', () => {
+            const provider = llmProviderSelect.value;
+            const apiKey = llmApiKeyInput.value.trim();
+
+            if (!provider) {
+                showStatusMessage(llmApiKeyStatus, 'Please select an LLM provider.', true);
+                return;
+            }
+            if (!apiKey) {
+                showStatusMessage(llmApiKeyStatus, 'API Key cannot be empty.', true);
+                return;
+            }
+
+            chrome.storage.local.set({ selectedLLMProvider: provider, llmApiKey: apiKey }, () => {
+                showStatusMessage(llmApiKeyStatus, 'LLM settings saved!');
             });
         });
-    });
-})();
+    }
+});

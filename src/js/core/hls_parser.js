@@ -2,6 +2,15 @@
 
 console.log('[hls_parser] Loading...');
 
+// JSON Web Token (JWT) decode library is expected to be available globally
+const jwtDecodeFromWindow = (typeof window !== 'undefined' && typeof window.jwtDecodeGlobal === 'function')
+    ? window.jwtDecodeGlobal
+    : null;
+
+if (!jwtDecodeFromWindow) {
+    console.warn('[hls_parser] window.jwtDecodeGlobal function not found. DRM token claim logging will be limited. Ensure jwt-decode.bundle.min.js is loaded.');
+}
+
 const state = {
     masterUrl: null,
     masterManifest: null,
@@ -15,8 +24,107 @@ const state = {
     initialLoadComplete: false,
     lastHttpStatus: null, // Updated: Stores an object { code, message, url, timestamp, error } or null
     targetDuration: null,
-    hlsVersion: null
+    hlsVersion: null,
+    drmAuthToken: null, // ADDED: Stores the user-provided bearer token
+    drmTokenDetailsLogged: false, // ADDED: Flag to ensure token details are logged only once per token until it changes
+    variantStreams: []
 };
+
+/**
+ * Logs details of the provided DRM authentication token.
+ * This includes decoded claims like expiration (exp), audience (aud), and issuer (iss).
+ * It also warns if the token is expired.
+ * @param {string} tokenString The JWT token string.
+ */
+function logDrmTokenDetails(tokenString) {
+    if (!tokenString) {
+        console.log('[hls_parser:DRM] No DRM token provided to log.');
+        return "ERROR: No token provided";
+    }
+
+    console.log(`[hls_parser:DRM] User provided token. M3U8 URL: ${getShortUrl(state.masterUrl || 'N/A')}`);
+
+    if (!jwtDecodeFromWindow) {
+        console.warn('[hls_parser:DRM] Cannot decode token: window.jwtDecodeGlobal function is not available.');
+        dispatchStatusUpdate("DRM token set (decode unavailable).");
+        return "WARNING: Decode function missing";
+    }
+
+    try {
+        const decodedToken = jwtDecodeFromWindow(tokenString);
+        const expirationTimestamp = decodedToken.exp;
+        const audience = decodedToken.aud;
+        const issuer = decodedToken.iss;
+        const currentTime = Math.floor(Date.now() / 1000);
+
+        console.log(`[hls_parser:DRM] Decoded Token - exp: ${expirationTimestamp ? new Date(expirationTimestamp * 1000).toISOString() : 'N/A'}, aud: ${audience || 'N/A'}, iss: ${issuer || 'N/A'}.`);
+
+        if (expirationTimestamp) {
+            if (currentTime > expirationTimestamp) {
+                console.warn(`[hls_parser:DRM] WARNING: User-provided token is EXPIRED.`);
+                dispatchStatusUpdate("Warning: Provided DRM token is EXPIRED.");
+                state.drmTokenDetailsLogged = true;
+                return "WARNING: Token expired";
+            } else {
+                console.log("[hls_parser:DRM] Token valid.");
+                dispatchStatusUpdate("DRM token validated.");
+                state.drmTokenDetailsLogged = true;
+                return "OK";
+            }
+        } else {
+            console.log("[hls_parser:DRM] No expiration claim.");
+            dispatchStatusUpdate("Token processed (no expiration).");
+            state.drmTokenDetailsLogged = true;
+            return "WARNING: No expiration claim";
+        }
+    } catch (error) {
+        console.error('[hls_parser:DRM] Error decoding DRM token:', error.message);
+        console.log(`[hls_parser:DRM] Token (first 10 chars): ${tokenString.substring(0, 10)}...`);
+        dispatchStatusUpdate("Error: Could not decode DRM token.");
+        state.drmTokenDetailsLogged = false;
+        return "ERROR: Failed to decode token";
+    }
+}
+
+
+/**
+ * Sets the DRM authentication token.
+ * This function is intended to be called by the UI or other parts of the application
+ * when the user provides a token.
+ * @param {string | null} token The bearer token string, or null to clear.
+ */
+    // Note: The actual use of this token (attaching to HLS.js license requests)
+    // needs to be handled by the HLS.js player setup logic, which should call
+    // getDrmAuthToken() to retrieve it.
+function setDrmAuthToken(token) {
+    const oldToken = state.drmAuthToken;
+    state.drmAuthToken = token ? String(token).trim() : null;
+
+    if (state.drmAuthToken !== oldToken) {
+        state.drmTokenDetailsLogged = false;
+    }
+
+    if (state.drmAuthToken) {
+        console.log('[hls_parser:DRM] DRM Authentication Token has been set/updated.');
+        return logDrmTokenDetails(state.drmAuthToken); // <- return status
+    } else {
+        if (oldToken) {
+            console.log('[hls_parser:DRM] DRM Authentication Token has been cleared.');
+            dispatchStatusUpdate("DRM token cleared.");
+        }
+        return "OK";
+    }
+}
+
+
+/**
+ * Retrieves the currently set DRM authentication token.
+ * @returns {string | null} The bearer token string, or null if not set.
+ */
+function getDrmAuthToken() {
+    return state.drmAuthToken;
+}
+
 
 // ---- Event Dispatcher ----
 function dispatchStatusUpdate(message) {
@@ -49,6 +157,16 @@ function initHlsParser(initialUrl) { // Renamed 'url' to 'initialUrl'
     }
     state.masterUrl = initialUrl;
     dispatchStatusUpdate(`Loading manifest: ${getShortUrl(initialUrl)}`);
+
+    // ADDED: Log DRM token details if a token is already set and not yet logged for this token
+    if (state.drmAuthToken && !state.drmTokenDetailsLogged) {
+        console.log('[hls_parser:DRM] Initializing parser with a pre-set DRM token. Logging details...');
+        logDrmTokenDetails(state.drmAuthToken);
+    } else if (state.drmAuthToken && state.drmTokenDetailsLogged) {
+        console.log('[hls_parser:DRM] Initializing parser; DRM token already set and details previously logged.');
+    } else {
+        console.log('[hls_parser:DRM] Initializing parser; no DRM token currently set.');
+    }
 
     // Add the initial Master/Media playlist entry to the UI immediately
     // We guess the type first, and refine after fetching
@@ -143,7 +261,7 @@ async function fetchManifest(urlToFetch) {
         return { content: text, finalUrl: finalUrlAfterRedirects };
     } catch (error) {
         if (!response) { // Network error or fetch API internal error (e.g., CORS)
-             // *** UPDATED: Store detailed error object for network/fetch errors ***
+            // *** UPDATED: Store detailed error object for network/fetch errors ***
             state.lastHttpStatus = {
                 code: null, // No HTTP status code applicable
                 message: error.message || 'Network/CORS Error',
@@ -176,10 +294,10 @@ function parseMasterPlaylist(masterContent, fetchedMasterUrl) {
     console.log(`[hls_parser] Found ${variants.length} variant streams.`);
     dispatchPlaylistParsed('master', { url: fetchedMasterUrl, content: masterContent, variants });
 
-    if (variants.length === 0) { 
+    if (variants.length === 0) {
         dispatchStatusUpdate("Master playlist has no variant streams.");
         console.warn("[hls_parser] No variant streams found in master playlist.");
-        return; 
+        return;
     }
 
     const selectedVariant = variants[0];
@@ -385,7 +503,7 @@ function parseMediaPlaylist(content, baseUrl, playlistId) {
                 let sctePayload = match[1].trim();
                 if (/^[A-Za-z0-9+/=]+$/.test(sctePayload) && (sctePayload.length % 4 === 0 || sctePayload.endsWith('='))) {
                     if (!/^[0-9A-Fa-f]+$/.test(sctePayload) || (sctePayload.length % 2 !== 0)) {
-                         encodingType = 'base64';
+                        encodingType = 'base64';
                     } else {
                         encodingType = 'hex';
                     }
@@ -404,7 +522,7 @@ function parseMediaPlaylist(content, baseUrl, playlistId) {
                     encodingType = 'hex';
                     extractedRawScte = sctePayload;
                 } else {
-                     console.warn(`[hls_parser] SCTE35-CMD payload for DATERANGE was not valid hex after removing '0x': ${sctePayload} in line: ${lineRaw}`);
+                    console.warn(`[hls_parser] SCTE35-CMD payload for DATERANGE was not valid hex after removing '0x': ${sctePayload} in line: ${lineRaw}`);
                 }
             }
 
@@ -540,7 +658,7 @@ function parseMediaPlaylist(content, baseUrl, playlistId) {
                 console.log(`[hls_parser] Attached ${pendingScteTagDataList.length} pending SCTE tag(s) to segment ${currentSegment.id}`);
                 pendingScteTagDataList = [];
             }
-            
+
             newSegments.push(currentSegment);
             dispatchSegmentAdded(currentSegment);
 
@@ -688,18 +806,205 @@ function getShortUrl(url, maxLength = 50) {
     }
 }
 
-// ---- Global API ----
-window.metaviewAPI = window.metaviewAPI || {};
-window.metaviewAPI.hlsparser = window.metaviewAPI.hlsparser || {};
+// ==================================
+// === metaviewAPI HLSParser API ===
+// ==================================
+if (!window.metaviewAPI) window.metaviewAPI = {};
+window.metaviewAPI.hlsparser = {
+    /**
+     * Initializes the HLS parser with the provided M3U8 URL.
+     * @param {string} initialUrl The URL of the master or media playlist.
+     */
+    init: initHlsParser,
 
-// ResponseStatus function returns the new status object
-window.metaviewAPI.hlsparser.ResponseStatus = function () {
-    return state.lastHttpStatus;
+    /**
+     * Returns the URL of the master playlist.
+     * @returns {string | null}
+     */
+    getMasterPlaylistUrl: function () {
+        return state.masterUrl;
+    },
+
+    /**
+     * Returns the raw content of the master playlist.
+     * @returns {string | null}
+     */
+    getMasterManifestContent: function () {
+        return state.masterManifest;
+    },
+
+    /**
+     * Returns details for a specific media playlist or all media playlists.
+     * @param {string} [playlistId] Optional ID of the media playlist.
+     * @returns {object | object[] | null} Playlist details including URL, content, bandwidth, resolution, codecs, and segment objects. Returns null if not found.
+     */
+    getMediaPlaylistDetails: function (playlistId) {
+        if (playlistId) {
+            return state.mediaPlaylists[playlistId] ? { ...state.mediaPlaylists[playlistId], segments: [...(state.mediaPlaylists[playlistId].segments || [])] } : null;
+        }
+        // Return a deep copy of all playlists if no ID is provided
+        const allPlaylistsCopy = {};
+        for (const id in state.mediaPlaylists) {
+            allPlaylistsCopy[id] = { ...state.mediaPlaylists[id], segments: [...(state.mediaPlaylists[id].segments || [])] };
+        }
+        return allPlaylistsCopy;
+    },
+
+    /**
+     * Returns an array of all variant stream objects extracted from the master playlist.
+     * Each object includes bandwidth, resolution, codecs, and URI.
+     * @returns {object[]} A copy of the array of variant stream objects.
+     */
+    getAllVariantStreams: function () {
+        return state.variantStreams ? [...state.variantStreams] : [];
+    },
+
+    /**
+     * Returns the HLS version declared in the playlist.
+     * @returns {number | null}
+     */
+    getHlsVersion: function () {
+        return state.hlsVersion;
+    },
+
+    /**
+     * Returns the target duration declared in the media playlist.
+     * @returns {number | null}
+     */
+    getTargetDuration: function () {
+        return state.targetDuration;
+    },
+
+    /**
+     * Indicates if the stream is identified as live.
+     * @returns {boolean}
+     */
+    isLiveStream: function () {
+        return state.isLive;
+    },
+
+    /**
+     * Returns a copy of all unique segments encountered across all playlists.
+     * Each segment object contains details like URL, duration, sequence, playlistId, etc.
+     * Includes raw SCTE tag data if present on the segment.
+     * @returns {object[]} An array of segment objects.
+     */
+    getAllSegments: function () {
+        return state.allSegments.map(segment => ({ ...segment })); // Shallow copy of each segment
+    },
+
+    /**
+     * Returns a specific segment object by its URL.
+     * @param {string} segmentUrl The URL of the segment.
+     * @returns {object | undefined} The segment object or undefined if not found.
+     */
+    getSegmentByUrl: function (segmentUrl) {
+        const segment = state.segmentMap.get(segmentUrl);
+        return segment ? { ...segment } : undefined; // Return a copy
+    },
+
+    /**
+     * Returns a specific segment object by its ID.
+     * Note: Segment IDs are generated internally (e.g., `${playlistId}_seq${sequence}`).
+     * @param {string} segmentId The ID of the segment.
+     * @returns {object | undefined} The segment object or undefined if not found.
+     */
+    getSegmentById: function (segmentId) {
+        const segment = state.allSegments.find(s => s.id === segmentId);
+        return segment ? { ...segment } : undefined; // Return a copy
+    },
+
+    /**
+     * Returns details of the initialization segment (EXT-X-MAP) for a given media playlist.
+     * @param {string} playlistId The ID of the media playlist.
+     * @returns {object | null} MAP details (URI, byterange) or null if not found or not applicable.
+     */
+    getInitializationSegment: function (playlistId) {
+        const playlist = state.mediaPlaylists[playlistId];
+        if (playlist && playlist.segments && playlist.segments.length > 0) {
+            // Assuming MAP applies to all segments or is defined early.
+            // A more robust approach might be to find the first segment with a map or store map at playlist level.
+            const firstSegmentWithMap = playlist.segments.find(s => s.map);
+            return firstSegmentWithMap ? { ...firstSegmentWithMap.map } : null;
+        }
+        // Or check if a global MAP was defined for the playlist (less common)
+        // This current implementation relies on map being part of a segment object.
+        return null;
+    },
+
+    /**
+     * Returns the ID of the currently active media playlist being parsed or refreshed.
+     * @returns {string | null}
+     */
+    getActiveMediaPlaylistId: function () {
+        return state.activeMediaPlaylistId;
+    },
+
+    /**
+     * Returns the last recorded HTTP status for playlist fetches.
+     * @returns {object | null} Object containing code, message, url, timestamp, error.
+     */
+    getLastHttpStatus: function () {
+        return state.lastHttpStatus ? { ...state.lastHttpStatus } : null;
+    },
+
+    /**
+     * Sets the DRM authentication token to be used by the parser or player.
+     * @param {string | null} token The bearer token string, or null to clear.
+     */
+    setDrmAuthToken: setDrmAuthToken,
+
+    /**
+     * Retrieves the currently set DRM authentication token.
+     * @returns {string | null} The bearer token string, or null if not set.
+     */
+    getDrmAuthToken: getDrmAuthToken,
+
 };
 
+// Expose the HLS parser API to the global window object
 window.HlsParser = {
     init: initHlsParser,
     getState: () => state,
 };
 
-console.log('[hls_parser] Ready.');
+console.log('[hls_parser] API ready.');
+
+/*
+TEST CALLSHEET:
+
+
+
+const fakeJwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.' + 'eyJ1c2VySWQiOiIxMjM0NTYiLCJyb2xlIjoiY29udHJpYnV0b3IiLCJleHAiOjE2NjAwMDAwMDB9.' + 'SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c';
+window.metaviewAPI.hlsparser.setDrmAuthToken(fakeJwt);                
+
+const validJwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.' + 'eyJ1c2VySWQiOiIxMjM0NTYiLCJyb2xlIjoiY29udHJpYnV0b3IiLCJleHAiOjIwMDAwMDAwMDB9.' + 'dummysignature1234567890';
+
+window.metaviewAPI.hlsparser.setDrmAuthToken(validJwt);
+window.metaviewAPI.hlsparser.setDrmAuthToken(null);
+window.metaviewAPI.hlsparser.getDrmAuthToken();
+
+window.metaviewAPI.hlsparser.getMasterPlaylistUrl();
+window.metaviewAPI.hlsparser.getMasterManifestContent(); //
+window.metaviewAPI.hlsparser.getMediaPlaylistDetails(); 
+window.metaviewAPI.hlsparser.getAllVariantStreams(); //
+window.metaviewAPI.hlsparser.getHlsVersion();
+window.metaviewAPI.hlsparser.getTargetDuration();
+window.metaviewAPI.hlsparser.isLiveStream();
+window.metaviewAPI.hlsparser.getAllSegments(); //
+
+window.metaviewAPI.hlsparser.getActiveMediaPlaylistId();
+window.metaviewAPI.hlsparser.getInitializationSegment('variant_5420800_1280x720');
+
+window.metaviewAPI.hlsparser.getLastHttpStatus();
+
+window.HlsParser.getState();
+
+*/
+
+/*
+
+AI
+
+
+*/

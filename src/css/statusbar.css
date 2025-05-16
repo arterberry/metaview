@@ -3,7 +3,27 @@
 /* White base text */
 .status-bar {
 	color: #969696;
+    /* Ensure flex layout for proper alignment of left and right groups */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 10px; /* Add some padding if needed */
+    height: 28px; /* Or your desired height */
+    background-color: #333; /* Match player's status bar bg if it has one */
 }
+
+/* Group for left-aligned items */
+.statusbar__left-group {
+    display: flex;
+    align-items: center;
+}
+
+/* Group for right-aligned items */
+.statusbar__right-group {
+    display: flex;
+    align-items: center;
+}
+
 
 /* Section blocks within the bar */
 .status-bar .statusbar__section {
@@ -24,6 +44,7 @@
 /* Response code styling (weight only here) */
 .status-bar .statusbar__code {
 	font-weight: bold;
+    margin-left: 4px; /* Space after "Status Response:" */
 }
 
 /* Correct selector for success codes */
@@ -36,25 +57,46 @@
 	color: #ebb5b5;
 }
 
-/* If you ever need the CDN text to always be white, you can explicitly force it: */
+/* Unknown/initial state code */
+.status-bar .statusbar__code--unknown {
+    color: #969696; /* Same as base text */
+}
+
+
 .status-bar .statusbar__cdn {
 	font-weight: bold;
 	color: #ffffff;
+    margin-left: 4px; /* Space after "CDN:" */
 }
 
-/* Buffer message base styling */
 .status-bar .statusbar__buffer {
 	font-size: 12px;
 	line-height: 1;
+    margin-left: 4px; /* Space after "Tracking Playback:" */
 }
 
-/* Normal (no buffering errors): inherit the default grey */
 .status-bar .statusbar__buffer--normal {
 	color: inherit;
 }
 
-/* Error (buffer stalled): red, bold */
 .status-bar .statusbar__buffer--error {
 	color: #ebb5b5;
 	font-weight: bold;
+}
+
+/* Styling for the Configuration link */
+.statusbar__config-link {
+    font-size: 11px; /* Small print */
+    color: #a0a0a0;  /* Light grey color */
+    text-decoration: none;
+    margin-left: 10px; /* Space from other elements if any */
+    padding: 2px 5px; /* Small padding */
+    border-radius: 3px;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.statusbar__config-link:hover {
+    color: #ffffff;
+    background-color: #4f4f4f; /* Slight background on hover */
+    text-decoration: none;
 }

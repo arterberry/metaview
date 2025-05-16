@@ -316,15 +316,7 @@
 
 /* ------- */
 
-/* AI Tab */
-.tab-pane#ai-tab {
-    display: none;
-}
-
-.tab-pane#ai-tab.active {
-    display: block;
-}
-
+/* Agent Tab */
 /* AI Analysis Styling */
 .ai-analysis-section {
     margin-bottom: 15px;

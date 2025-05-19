@@ -297,3 +297,70 @@
   flex-direction: column;
   margin-left: 10px;
 }
+
+/* Help icon and tooltip */
+.agent-metric-timer-help {
+    position: relative;
+    display: inline-block;
+    margin-left: 5px;
+}
+
+.agent-metric-help-icon {
+    width: 16px;
+    height: 16px;
+    fill: #8bc569;
+    cursor: help;
+    vertical-align: middle;
+}
+
+.agent-metric-tooltip {
+    visibility: hidden;
+    background-color: #67914f;
+    color: white;
+    text-align: left;
+    padding: 8px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    line-height: 1.4;
+    width: 220px;
+    
+    /* Position the tooltip */
+    position: absolute;
+    z-index: 1;
+    bottom: 125%;
+    left: 50%;
+    margin-left: -110px;
+    
+    /* Fade effect */
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+/* Arrow */
+.agent-metric-tooltip::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    margin-left: -5px;
+    border-width: 5px;
+    border-style: solid;
+    border-color: #67914f transparent transparent transparent;
+}
+
+/* Show on hover */
+.agent-metric-timer-help:hover .agent-metric-tooltip {
+    visibility: visible;
+    opacity: 1;
+}
+
+/* Update timer controls layout to incorporate help icon */
+.agent-metric-timer-controls {
+    display: flex;
+    align-items: center;
+    background-color: #333333;
+    border: 1px solid #555555;
+    border-radius: 4px;
+    padding: 0;
+    overflow: hidden;
+}

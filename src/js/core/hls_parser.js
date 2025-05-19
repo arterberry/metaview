@@ -343,7 +343,7 @@ function parseMasterPlaylist(masterContent, fetchedMasterUrl) {
 
                 if (needsQueryParamTokens) {
                     if (mediaPlaylistUriFromMaster.includes('?') || currentMediaUrlObj.search) {
-                        console.warn(`[hls_parser] Media URI/URL already had query params. They will be replaced by original master's query params: ${originalEntryPointUrlObj.search}`);
+                        console.log(`[hls_parser] Media URI/URL already had query params. They will be replaced by original master's query params: ${originalEntryPointUrlObj.search}`);
                     }
                     const tempUrl = new URL(finalMediaPlaylistUrl);
                     tempUrl.search = originalEntryPointUrlObj.search;

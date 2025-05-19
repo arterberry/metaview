@@ -31,7 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
         allPlayerErrors = [];
         allEarlyScteDetections = [];
         currentHlsConfig = null;
-        console.log('[player_loader] Collected data arrays have been reset.');
+        // console.log('[player_loader] Collected data arrays have been reset.');
     }
 
     // Listen to the newStreamLoading event (dispatched by this script) to reset data
@@ -99,7 +99,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // If no definitive header found
-            console.log('[detectCacheStatus] No definitive cache header found.'); // Debug
+            // console.log('[detectCacheStatus] No definitive cache header found.'); // Debug
             return null; // Indicate unknown status
         }
 
@@ -172,7 +172,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 const headerString = xhr.getAllResponseHeaders();
                                 processedHeaders = parseHeaders(headerString); // Parse headers ONCE
 
-                                console.log(`[HeaderCaptureLoader] Headers received for ${getShortUrl(context.url)}:`, processedHeaders);
+                                // console.log(`[HeaderCaptureLoader] Headers received for ${getShortUrl(context.url)}:`, processedHeaders);
 
                                 // STORE collected headers for API
                                 allCollectedHeaders.push({
@@ -196,9 +196,9 @@ document.addEventListener('DOMContentLoaded', () => {
                                 ttlInfo = extractTTLInfo(processedHeaders);
 
                                 if (ttlInfo && ttlInfo.hasDirectives) {
-                                    console.log("[HeaderCaptureLoader] TTL Info Extracted:", ttlInfo);
+                                    // console.log("[HeaderCaptureLoader] TTL Info Extracted:", ttlInfo);
                                 } else if (ttlInfo) {
-                                    console.log(`[HeaderCaptureLoader] No relevant TTL directives found in headers for ${getShortUrl(context.url)}.`);
+                                    // console.log(`[HeaderCaptureLoader] No relevant TTL directives found in headers for ${getShortUrl(context.url)}.`);
                                 }
 
                             } catch (e) {
@@ -207,7 +207,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 processedHeaders = {};
                             }
                         } else {
-                            console.log(`[HeaderCaptureLoader] Skipping header processing for type: ${context.type} or XHR unavailable.`);
+                            // console.log(`[HeaderCaptureLoader] Skipping header processing for type: ${context.type} or XHR unavailable.`);
                         }
 
                         // Dispatch cache status event if found
@@ -274,7 +274,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // xhrSetup from existing code (modify if needed)
             xhrSetup: function (xhr, url) {
-                console.log('[player_loader] XHR request to:', url); // Can be noisy
+                // console.log('[player_loader] XHR request to:', url); // Can be noisy
                 xhr.setRequestHeader('Accept', '*/*');
                 xhr.setRequestHeader('Cache-Control', 'no-cache');
                 xhr.setRequestHeader('Pragma', 'no-cache');
@@ -285,13 +285,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // Remove loader from the stored config if it's an issue for JSON stringification or display
         if (currentHlsConfig.loader) delete currentHlsConfig.loader;
 
-        console.log('[player_loader] HLS Config (with custom loader):', hlsConfig);
+        // console.log('[player_loader] HLS Config (with custom loader):', hlsConfig);
         const hls = new Hls(hlsConfig);
 
         window.hlsPlayerInstance = hls; // Make instance globally accessible
 
         // ---> ADD EVENT DISPATCH HERE <---
-        console.log('[player_loader] Dispatching newStreamLoading event.');
+        // console.log('[player_loader] Dispatching newStreamLoading event.');
         document.dispatchEvent(new CustomEvent('newStreamLoading'));
         // ---> END EVENT DISPATCH <---
 
@@ -369,12 +369,12 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- END OF SCTE35 TAG HANDLER ---
 
         hls.on(Hls.Events.MANIFEST_LOADING, function (event, data) {
-            console.log("[player_loader] HLS Event: Manifest loading:", data.url);
+            // console.log("[player_loader] HLS Event: Manifest loading:", data.url);
             // if (window.addPlayerLogEntry) window.addPlayerLogEntry(`Manifest loading: ${getShortUrl(data.url)}`);
         });
 
         hls.on(Hls.Events.FRAG_LOADING, function (event, data) {
-            console.log(`[player_loader] HLS Event: Fragment loading: ${data.frag.sn} (${data.frag.url})`);
+            // console.log(`[player_loader] HLS Event: Fragment loading: ${data.frag.sn} (${data.frag.url})`);
             // if (window.addPlayerLogEntry) window.addPlayerLogEntry(`Frag loading: ${data.frag.sn} (${getShortUrl(data.frag.url)})`);
         });
 
@@ -385,7 +385,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const duration = frag.duration;
             const level = frag.level;
 
-            console.log(`[player_loader] HLS Event: Fragment loaded: ${sn} (${getShortUrl(url)})`);
+            // console.log(`[player_loader] HLS Event: Fragment loaded: ${sn} (${getShortUrl(url)})`);
 
             // Create detail object for the UI event
             const fragmentDetail = {
@@ -505,22 +505,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Recovery logic
                 switch (data.type) {
                     case Hls.ErrorTypes.NETWORK_ERROR:
-                        console.log("[player_loader] Attempting recovery: hls.startLoad()");
+                        // console.log("[player_loader] Attempting recovery: hls.startLoad()");
                         hls.startLoad();
                         break;
                     case Hls.ErrorTypes.MEDIA_ERROR:
-                        console.log("[player_loader] Attempting recovery: hls.recoverMediaError()");
+                        // console.log("[player_loader] Attempting recovery: hls.recoverMediaError()");
                         // Be cautious: recoverMediaError can sometimes trigger internal exceptions
                         try {
                             hls.recoverMediaError();
                         } catch (recoveryError) {
                             console.error("[player_loader] Error during recoverMediaError():", recoveryError);
-                            console.log("[player_loader] Destroying HLS instance due to recovery failure.");
+                            // console.log("[player_loader] Destroying HLS instance due to recovery failure.");
                             hls.destroy(); // Destroy if recovery fails badly
                         }
                         break;
                     default:
-                        console.log("[player_loader] Non-recoverable fatal error or unhandled type. Destroying HLS instance.");
+                        // console.log("[player_loader] Non-recoverable fatal error or unhandled type. Destroying HLS instance.");
                         hls.destroy(); // Destroy for other fatal errors
                         break;
                 }
@@ -565,12 +565,12 @@ document.addEventListener('DOMContentLoaded', () => {
         // Show/Hide based on video element events
         video.addEventListener('waiting', function () {
             // 'waiting' fires when playback stops due to lack of data
-            console.log('[player_loader] Video event: waiting (buffering)');
+            // console.log('[player_loader] Video event: waiting (buffering)');
             bufferingIndicator.style.display = 'block';
         });
         video.addEventListener('playing', function () {
             // 'playing' fires when playback resumes after buffering or seeking
-            console.log('[player_loader] Video event: playing');
+            // console.log('[player_loader] Video event: playing');
             bufferingIndicator.style.display = 'none';
         });
         video.addEventListener('seeking', function () {
@@ -594,7 +594,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // MANIFEST_PARSED listener (already existed, slightly modified log)
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
-            console.log('[player_loader] HLS Event: Manifest parsed. Attempting playback.');
+            // console.log('[player_loader] HLS Event: Manifest parsed. Attempting playback.');
             // if (window.addPlayerLogEntry) window.addPlayerLogEntry('Manifest parsed, starting playback.');
             video.play().catch(err => {
                 console.warn('[player_loader] Autoplay failed:', err.message);
@@ -605,7 +605,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // Broadcast event AFTER attaching listeners
-        console.log('[player_loader] Dispatching hlsLoaded event.');
+        // console.log('[player_loader] Dispatching hlsLoaded event.');
         document.dispatchEvent(new CustomEvent('hlsLoaded', { detail: { hls } }));
 
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
@@ -615,7 +615,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Safari / native fallback
         video.src = hlsUrl;
         video.addEventListener('loadedmetadata', () => {
-            console.log('[player_loader] Native HLS loaded, starting playback');
+            // console.log('[player_loader] Native HLS loaded, starting playback');
             // if (window.addPlayerLogEntry) window.addPlayerLogEntry('Native HLS playback started.');
             video.play().catch(err => {
                 console.warn('[player_loader] Native autoplay error:', err);
@@ -665,7 +665,7 @@ function getShortUrl(url, maxLength = 60) {
 /** Extracts the full raw src from the query without decoding */
 function getRawSrcUrl() {
     const raw = new URLSearchParams(window.location.search).get('src');
-    console.log('[player_loader] Raw "src" from query:', raw);
+    // console.log('[player_loader] Raw "src" from query:', raw);
     return raw || null;
 }
 

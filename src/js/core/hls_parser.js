@@ -42,7 +42,7 @@ function logDrmTokenDetails(tokenString) {
         return "ERROR: No token provided";
     }
 
-    console.log(`[hls_parser:DRM] User provided token. M3U8 URL: ${getShortUrl(state.masterUrl || 'N/A')}`);
+    // console.log(`[hls_parser:DRM] User provided token. M3U8 URL: ${getShortUrl(state.masterUrl || 'N/A')}`);
 
     if (!jwtDecodeFromWindow) {
         console.warn('[hls_parser:DRM] Cannot decode token: window.jwtDecodeGlobal function is not available.');
@@ -57,7 +57,7 @@ function logDrmTokenDetails(tokenString) {
         const issuer = decodedToken.iss;
         const currentTime = Math.floor(Date.now() / 1000);
 
-        console.log(`[hls_parser:DRM] Decoded Token - exp: ${expirationTimestamp ? new Date(expirationTimestamp * 1000).toISOString() : 'N/A'}, aud: ${audience || 'N/A'}, iss: ${issuer || 'N/A'}.`);
+        // console.log(`[hls_parser:DRM] Decoded Token - exp: ${expirationTimestamp ? new Date(expirationTimestamp * 1000).toISOString() : 'N/A'}, aud: ${audience || 'N/A'}, iss: ${issuer || 'N/A'}.`);
 
         if (expirationTimestamp) {
             if (currentTime > expirationTimestamp) {
@@ -72,14 +72,14 @@ function logDrmTokenDetails(tokenString) {
                 return "OK";
             }
         } else {
-            console.log("[hls_parser:DRM] No expiration claim.");
+            // console.log("[hls_parser:DRM] No expiration claim.");
             dispatchStatusUpdate("Token processed (no expiration).");
             state.drmTokenDetailsLogged = true;
             return "WARNING: No expiration claim";
         }
     } catch (error) {
         console.error('[hls_parser:DRM] Error decoding DRM token:', error.message);
-        console.log(`[hls_parser:DRM] Token (first 10 chars): ${tokenString.substring(0, 10)}...`);
+        // console.log(`[hls_parser:DRM] Token (first 10 chars): ${tokenString.substring(0, 10)}...`);
         dispatchStatusUpdate("Error: Could not decode DRM token.");
         state.drmTokenDetailsLogged = false;
         return "ERROR: Failed to decode token";
@@ -105,11 +105,11 @@ function setDrmAuthToken(token) {
     }
 
     if (state.drmAuthToken) {
-        console.log('[hls_parser:DRM] DRM Authentication Token has been set/updated.');
+        // console.log('[hls_parser:DRM] DRM Authentication Token has been set/updated.');
         return logDrmTokenDetails(state.drmAuthToken); // <- return status
     } else {
         if (oldToken) {
-            console.log('[hls_parser:DRM] DRM Authentication Token has been cleared.');
+            // console.log('[hls_parser:DRM] DRM Authentication Token has been cleared.');
             dispatchStatusUpdate("DRM token cleared.");
         }
         return "OK";
@@ -139,7 +139,7 @@ function dispatchSegmentAdded(segment) {
         document.dispatchEvent(new CustomEvent('hlsSegmentAdded', { detail: { segment } }));
     } else {
         // Optionally update existing segment if needed (e.g., new metadata)
-        console.log(`[hls_parser] Segment already known: ${segment.url}`);
+        // console.log(`[hls_parser] Segment already known: ${segment.url}`);
     }
 }
 
@@ -160,12 +160,12 @@ function initHlsParser(initialUrl) { // Renamed 'url' to 'initialUrl'
 
     // ADDED: Log DRM token details if a token is already set and not yet logged for this token
     if (state.drmAuthToken && !state.drmTokenDetailsLogged) {
-        console.log('[hls_parser:DRM] Initializing parser with a pre-set DRM token. Logging details...');
+        // console.log('[hls_parser:DRM] Initializing parser with a pre-set DRM token. Logging details...');
         logDrmTokenDetails(state.drmAuthToken);
     } else if (state.drmAuthToken && state.drmTokenDetailsLogged) {
-        console.log('[hls_parser:DRM] Initializing parser; DRM token already set and details previously logged.');
+        // console.log('[hls_parser:DRM] Initializing parser; DRM token already set and details previously logged.');
     } else {
-        console.log('[hls_parser:DRM] Initializing parser; no DRM token currently set.');
+        // console.log('[hls_parser:DRM] Initializing parser; no DRM token currently set.');
     }
 
     // Add the initial Master/Media playlist entry to the UI immediately
@@ -197,10 +197,10 @@ function initHlsParser(initialUrl) { // Renamed 'url' to 'initialUrl'
             }));
 
             if (isMaster) {
-                console.log('[hls_parser] Detected master playlist. Initial URL:', getShortUrl(initialUrl), 'Final Fetched URL:', getShortUrl(finalFetchedUrl));
+                // console.log('[hls_parser] Detected master playlist. Initial URL:', getShortUrl(initialUrl), 'Final Fetched URL:', getShortUrl(finalFetchedUrl));
                 parseMasterPlaylist(content, finalFetchedUrl); // <<<< PASS THE FINAL FETCHED URL HERE
             } else {
-                console.log('[hls_parser] Detected media playlist. Initial URL:', getShortUrl(initialUrl), 'Final Fetched URL:', getShortUrl(finalFetchedUrl));
+                // console.log('[hls_parser] Detected media playlist. Initial URL:', getShortUrl(initialUrl), 'Final Fetched URL:', getShortUrl(finalFetchedUrl));
                 handleDirectMediaPlaylist(content, finalFetchedUrl); // <<<< PASS THE FINAL FETCHED URL HERE
             }
             state.initialLoadComplete = true;
@@ -221,7 +221,7 @@ function initHlsParser(initialUrl) { // Renamed 'url' to 'initialUrl'
 
 // ---- Playlist Fetch ----
 async function fetchManifest(urlToFetch) {
-    console.log('[hls_parser] Fetching manifest:', getShortUrl(urlToFetch));
+    // console.log('[hls_parser] Fetching manifest:', getShortUrl(urlToFetch));
     let response = null;
     try {
         response = await fetch(urlToFetch, {
@@ -246,7 +246,7 @@ async function fetchManifest(urlToFetch) {
         };
 
         const finalUrlAfterRedirects = response.url;
-        console.log(`[hls_parser] Request to ${getShortUrl(urlToFetch)}, Final URL after redirects: ${getShortUrl(finalUrlAfterRedirects)}, Status: ${response.status} ${response.statusText}`);
+        // console.log(`[hls_parser] Request to ${getShortUrl(urlToFetch)}, Final URL after redirects: ${getShortUrl(finalUrlAfterRedirects)}, Status: ${response.status} ${response.statusText}`);
 
         if (!response.ok) {
             // state.lastHttpStatus is already set with error details
@@ -288,10 +288,10 @@ function isMasterPlaylist(content) {
 function parseMasterPlaylist(masterContent, fetchedMasterUrl) {
     state.masterManifest = masterContent;
     dispatchStatusUpdate('Parsing master playlist...');
-    console.log(`[hls_parser] Parsing master manifest fetched from: ${getShortUrl(fetchedMasterUrl)}`);
+    // console.log(`[hls_parser] Parsing master manifest fetched from: ${getShortUrl(fetchedMasterUrl)}`);
 
     const variants = extractVariantStreams(masterContent);
-    console.log(`[hls_parser] Found ${variants.length} variant streams.`);
+    // console.log(`[hls_parser] Found ${variants.length} variant streams.`);
     dispatchPlaylistParsed('master', { url: fetchedMasterUrl, content: masterContent, variants });
 
     if (variants.length === 0) {
@@ -304,14 +304,14 @@ function parseMasterPlaylist(masterContent, fetchedMasterUrl) {
     const mediaPlaylistUriFromMaster = selectedVariant.uri;
 
     let finalMediaPlaylistUrl = resolveUrl(mediaPlaylistUriFromMaster, fetchedMasterUrl);
-    console.log(`[hls_parser] Initial resolved media playlist URL (from fetchedMasterUrl): ${getShortUrl(finalMediaPlaylistUrl)}`);
+    // console.log(`[hls_parser] Initial resolved media playlist URL (from fetchedMasterUrl): ${getShortUrl(finalMediaPlaylistUrl)}`);
 
     const fetchedMasterUrlObj = new URL(fetchedMasterUrl);
     const tokenPathRegex = /(\/[0-9a-f]{10,}_[0-9a-f]{10,}\/\*\~\/)/i;
     const masterPathHasTokenComponent = tokenPathRegex.test(fetchedMasterUrlObj.pathname);
 
     if (masterPathHasTokenComponent) {
-        console.log(`[hls_parser] Detected path-based token in fetchedMasterUrl's path (${fetchedMasterUrlObj.pathname}). Assuming path token is sufficient.`);
+        // console.log(`[hls_parser] Detected path-based token in fetchedMasterUrl's path (${fetchedMasterUrlObj.pathname}). Assuming path token is sufficient.`);
         const tempUrlObj = new URL(finalMediaPlaylistUrl);
         if (tempUrlObj.search) {
             if (!mediaPlaylistUriFromMaster.includes('?')) {
@@ -323,7 +323,7 @@ function parseMasterPlaylist(masterContent, fetchedMasterUrl) {
             }
         }
     } else {
-        console.log(`[hls_parser] No clear path-based token in fetchedMasterUrl. Attempting query string token propagation.`);
+        // console.log(`[hls_parser] No clear path-based token in fetchedMasterUrl. Attempting query string token propagation.`);
         try {
             const originalEntryPointUrlObj = new URL(state.masterUrl);
             const currentMediaUrlObj = new URL(finalMediaPlaylistUrl);
@@ -336,19 +336,19 @@ function parseMasterPlaylist(masterContent, fetchedMasterUrl) {
                 for (const tokenParam of commonTokenParams) {
                     if (currentMediaParams.has(tokenParam)) {
                         needsQueryParamTokens = false;
-                        console.log(`[hls_parser] Media URL ${getShortUrl(finalMediaPlaylistUrl)} already has query token ('${tokenParam}'). Skipping master query param append.`);
+                        // console.log(`[hls_parser] Media URL ${getShortUrl(finalMediaPlaylistUrl)} already has query token ('${tokenParam}'). Skipping master query param append.`);
                         break;
                     }
                 }
 
                 if (needsQueryParamTokens) {
                     if (mediaPlaylistUriFromMaster.includes('?') || currentMediaUrlObj.search) {
-                        console.log(`[hls_parser] Media URI/URL already had query params. They will be replaced by original master's query params: ${originalEntryPointUrlObj.search}`);
+                        // console.log(`[hls_parser] Media URI/URL already had query params. They will be replaced by original master's query params: ${originalEntryPointUrlObj.search}`);
                     }
                     const tempUrl = new URL(finalMediaPlaylistUrl);
                     tempUrl.search = originalEntryPointUrlObj.search;
                     finalMediaPlaylistUrl = tempUrl.toString();
-                    console.log(`[hls_parser] Applied query tokens from original entry point. New media URL: ${getShortUrl(finalMediaPlaylistUrl)}`);
+                    // console.log(`[hls_parser] Applied query tokens from original entry point. New media URL: ${getShortUrl(finalMediaPlaylistUrl)}`);
                 }
             }
         } catch (e) {
@@ -534,7 +534,7 @@ function parseMediaPlaylist(content, baseUrl, playlistId) {
                 };
             } else if (line.includes('SCTE35-CMD') || line.includes('SCTE') || line.includes('CUE')) {
                 if (line.includes('SCTE35-CMD') || (!line.startsWith('#EXT-X-DATERANGE') && (line.includes('SCTE') || line.includes('CUE')))) {
-                    console.log(`[hls_parser] Line contains SCTE/CUE keywords but no raw data extracted: ${lineRaw}.`);
+                    // console.log(`[hls_parser] Line contains SCTE/CUE keywords but no raw data extracted: ${lineRaw}.`);
                 }
             }
 
@@ -620,7 +620,7 @@ function parseMediaPlaylist(content, baseUrl, playlistId) {
             }
 
         } else if (line === '#EXT-X-DISCONTINUITY') {
-            console.log('[hls_parser] Found exact #EXT-X-DISCONTINUITY tag.');
+            // console.log('[hls_parser] Found exact #EXT-X-DISCONTINUITY tag.');
             discontinuitySequence++;
             if (currentSegment) {
                 currentSegment.discontinuity = true;
@@ -639,7 +639,7 @@ function parseMediaPlaylist(content, baseUrl, playlistId) {
             state.isLive = false;
             clearInterval(state.playlistRefreshInterval);
             state.playlistRefreshInterval = null;
-            console.log('[hls_parser] Reached ENDLIST.');
+            // console.log('[hls_parser] Reached ENDLIST.');
             dispatchStatusUpdate("VOD stream finished loading.");
             if (currentSegment) {
                 console.warn("[hls_parser] Playlist ended unexpectedly after EXTINF but before segment URI for sequence", currentSegment.sequence);
@@ -655,7 +655,7 @@ function parseMediaPlaylist(content, baseUrl, playlistId) {
                     currentSegment.scteTagDataList = [];
                 }
                 currentSegment.scteTagDataList.push(...pendingScteTagDataList);
-                console.log(`[hls_parser] Attached ${pendingScteTagDataList.length} pending SCTE tag(s) to segment ${currentSegment.id}`);
+                // console.log(`[hls_parser] Attached ${pendingScteTagDataList.length} pending SCTE tag(s) to segment ${currentSegment.id}`);
                 pendingScteTagDataList = [];
             }
 
@@ -663,7 +663,7 @@ function parseMediaPlaylist(content, baseUrl, playlistId) {
             dispatchSegmentAdded(currentSegment);
 
             if (currentSegment.discontinuity) {
-                console.log(`[hls_parser] Dispatching discontinuity for segment: ${currentSegment.id}`);
+                // console.log(`[hls_parser] Dispatching discontinuity for segment: ${currentSegment.id}`);
                 document.dispatchEvent(new CustomEvent('hlsDiscontinuityDetected', { detail: { segment: currentSegment } }));
             }
 
@@ -692,11 +692,11 @@ function parseMediaPlaylist(content, baseUrl, playlistId) {
 
         if (trulyNewSegments.length > 0) {
             state.mediaPlaylists[playlistId].segments.push(...trulyNewSegments);
-            console.log(`[hls_parser] Added ${trulyNewSegments.length} new segments to playlist ${playlistId} (Total now: ${state.mediaPlaylists[playlistId].segments.length}).`);
+            // console.log(`[hls_parser] Added ${trulyNewSegments.length} new segments to playlist ${playlistId} (Total now: ${state.mediaPlaylists[playlistId].segments.length}).`);
         } else if (newSegments.length > 0) {
-            console.log(`[hls_parser] Parsed ${newSegments.length} segments for playlist ${playlistId}, but none were newer than sequence ${lastExistingSeq}.`);
+            // console.log(`[hls_parser] Parsed ${newSegments.length} segments for playlist ${playlistId}, but none were newer than sequence ${lastExistingSeq}.`);
         } else {
-            console.log(`[hls_parser] No segments parsed in this update for playlist ${playlistId}.`);
+            // console.log(`[hls_parser] No segments parsed in this update for playlist ${playlistId}.`);
         }
     } else {
         console.error(`[hls_parser] Playlist ID ${playlistId} not found in state when trying to add segments! Creating entry.`);
@@ -713,20 +713,20 @@ function startPlaylistRefresh(initialRefreshUrl, playlistId) {
     if (state.playlistRefreshInterval) {
         clearInterval(state.playlistRefreshInterval);
         state.playlistRefreshInterval = null;
-        console.log('[hls_parser] Cleared existing refresh interval before starting new one.');
+        // console.log('[hls_parser] Cleared existing refresh interval before starting new one.');
     }
 
     const refreshDelay = state.targetDuration
         ? Math.max(1000, state.targetDuration * 1000 * 0.7)
         : state.updateInterval;
 
-    console.log(`[hls_parser] Starting playlist refresh for Playlist ID: ${playlistId} (URL: ${getShortUrl(initialRefreshUrl)}) every ${refreshDelay}ms.`);
+    // console.log(`[hls_parser] Starting playlist refresh for Playlist ID: ${playlistId} (URL: ${getShortUrl(initialRefreshUrl)}) every ${refreshDelay}ms.`);
 
     state.playlistRefreshInterval = setInterval(async () => {
         if (!state.isLive) {
             clearInterval(state.playlistRefreshInterval);
             state.playlistRefreshInterval = null;
-            console.log(`[hls_parser] Stream for Playlist ID: ${playlistId} is no longer live. Stopping refresh.`);
+            // console.log(`[hls_parser] Stream for Playlist ID: ${playlistId} is no longer live. Stopping refresh.`);
             return;
         }
 
@@ -744,15 +744,15 @@ function startPlaylistRefresh(initialRefreshUrl, playlistId) {
             const actualFetchedUrl = fetchResult.finalUrl;
 
             if (initialRefreshUrl !== actualFetchedUrl && !actualFetchedUrl.startsWith('blob:')) {
-                console.log(`[hls_parser] Refresh URL for Playlist ID: ${playlistId} redirected: ${getShortUrl(initialRefreshUrl)} -> ${getShortUrl(actualFetchedUrl)}`);
+                // console.log(`[hls_parser] Refresh URL for Playlist ID: ${playlistId} redirected: ${getShortUrl(initialRefreshUrl)} -> ${getShortUrl(actualFetchedUrl)}`);
             }
 
             if (currentPlaylistInState.content !== newPlaylistString) {
-                console.log(`[hls_parser] Playlist ID: ${playlistId} (fetched from ${getShortUrl(actualFetchedUrl)}) has updated content. Reparsing.`);
+                // console.log(`[hls_parser] Playlist ID: ${playlistId} (fetched from ${getShortUrl(actualFetchedUrl)}) has updated content. Reparsing.`);
                 currentPlaylistInState.content = newPlaylistString;
 
                 if (currentPlaylistInState.url !== actualFetchedUrl && !actualFetchedUrl.startsWith('blob:')) {
-                    console.log(`[hls_parser] Updating stored URL for Playlist ID: ${playlistId} from ${getShortUrl(currentPlaylistInState.url)} to ${getShortUrl(actualFetchedUrl)}.`);
+                    // console.log(`[hls_parser] Updating stored URL for Playlist ID: ${playlistId} from ${getShortUrl(currentPlaylistInState.url)} to ${getShortUrl(actualFetchedUrl)}.`);
                     currentPlaylistInState.url = actualFetchedUrl;
                 }
 
@@ -763,7 +763,7 @@ function startPlaylistRefresh(initialRefreshUrl, playlistId) {
                     content: newPlaylistString
                 });
             } else {
-                console.log(`[hls_parser] Playlist ID: ${playlistId} (fetched from ${getShortUrl(actualFetchedUrl)}) content unchanged.`);
+                // console.log(`[hls_parser] Playlist ID: ${playlistId} (fetched from ${getShortUrl(actualFetchedUrl)}) content unchanged.`);
             }
         } catch (err) {
             console.error(`[hls_parser] Error refreshing Playlist ID: ${playlistId} (attempted URL: ${getShortUrl(initialRefreshUrl)}):`, err);

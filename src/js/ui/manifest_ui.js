@@ -17,7 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Find the HLS URL from the query string (used by player_loader.js as well)
     const hlsUrl = getRawSrcUrl();
     if (hlsUrl && window.HlsParser) {
-        console.log(`[manifest_ui] Triggering HLS parser for: ${hlsUrl}`);
+        // console.log(`[manifest_ui] Triggering HLS parser for: ${hlsUrl}`);
         window.HlsParser.init(hlsUrl); // Start the parsing process
     } else if (!hlsUrl) {
         console.warn('[manifest_ui] No HLS URL found in query params for parser.');
@@ -42,7 +42,7 @@ function cacheDOMElements() {
 }
 
 function setupEventListeners() {
-    console.log('[manifest_ui] Setting up event listeners for HLS parser and fragment events.');
+    // console.log('[manifest_ui] Setting up event listeners for HLS parser and fragment events.');
     // document.addEventListener('hlsStatusUpdate', (e) => updateStatus(e.detail.message));
     document.addEventListener('hlsSegmentAdded', (e) => addSegmentToUI(e.detail.segment)); // For parsed items
     document.addEventListener('hlsFragLoadedUI', (e) => addSegmentToUI(e.detail)); // For live fragments <<< ADD THIS LISTENER
@@ -95,7 +95,7 @@ function setupUIHandlers() {
                 const segmentUrl = targetElement.getAttribute('data-segment-url');
                 const segmentType = targetElement.getAttribute('data-segment-type');
 
-                console.log(`[manifest_ui] Clicked on element: ID=${segmentId}, Type=${segmentType}, URL=${segmentUrl}`); // Enhanced log
+                // console.log(`[manifest_ui] Clicked on element: ID=${segmentId}, Type=${segmentType}, URL=${segmentUrl}`); // Enhanced log
 
                 if (!segmentUrl) {
                     console.warn('[manifest_ui] Clicked item is missing data-segment-url attribute.');
@@ -104,26 +104,26 @@ function setupUIHandlers() {
 
                 if (segmentType === 'master' || segmentType === 'media') {
                     // Playlist clicked: Pass minimal info needed for fetchPlaylistContent
-                    console.log('[manifest_ui] Playlist item clicked. Selecting...');
+                    // console.log('[manifest_ui] Playlist item clicked. Selecting...');
                     selectSegment({ id: segmentId, url: segmentUrl, type: segmentType }, targetElement);
 
                 } else if (segmentType === 'segment' || segmentType === 'fragment' || !segmentType /* Assume segment if type missing */) {
                     // Segment clicked: Try getting full object from parser state
-                    console.log('[manifest_ui] Segment item clicked. Trying to get state...');
+                    // console.log('[manifest_ui] Segment item clicked. Trying to get state...');
                     const parserState = window.HlsParser?.getState();
                     const segmentObject = parserState?.segmentMap.get(segmentUrl); // segmentMap stores segments by URL
 
                     if (segmentObject) {
-                        console.log('[manifest_ui] Found full segment object in state.');
+                        // console.log('[manifest_ui] Found full segment object in state.');
                         selectSegment(segmentObject, targetElement);
                     } else {
                         // Fallback if segment object not found (e.g., added by hls-listener or state issue)
-                        console.log(`[manifest_ui] Segment object not found in parser state (expected for live fragments/other sources) for URL: ${segmentUrl}. Using minimal info from DOM.`);
+                        // console.log(`[manifest_ui] Segment object not found in parser state (expected for live fragments/other sources) for URL: ${segmentUrl}. Using minimal info from DOM.`);
                         selectSegment({ id: segmentId, url: segmentUrl, type: segmentType || 'segment' }, targetElement);
                     }
                 } else {
                     // Handle other types like 'unknown', 'error'
-                    console.log(`[manifest_ui] Clicked on element of type: ${segmentType}. Selecting with minimal info.`);
+                    // console.log(`[manifest_ui] Clicked on element of type: ${segmentType}. Selecting with minimal info.`);
                     // Get title from element text for display
                     const titleNode = targetElement.querySelector('.segment-label-text') || targetElement;
                     const title = titleNode ? titleNode.textContent.trim() : 'Unknown Item';
@@ -139,7 +139,7 @@ function setupUIHandlers() {
 
 function handlePlaylistParsed(event) {
     const { type, url, content, variants, id } = event.detail;
-    console.log(`[manifest_ui] Received Playlist Parsed event: Type=${type}, URL=${url}`);
+    // console.log(`[manifest_ui] Received Playlist Parsed event: Type=${type}, URL=${url}`);
 
     if (type === 'master') {
         // Update title maybe?
@@ -164,7 +164,7 @@ function handleUpdateSegmentType(event) {
     const { url, type, title } = event.detail;
     const element = document.querySelector(`div[data-segment-url="${url}"]`);
     if (element) {
-        console.log(`[manifest_ui] Updating type for ${url} to ${type}`);
+        // console.log(`[manifest_ui] Updating type for ${url} to ${type}`);
         element.setAttribute('data-segment-type', type);
 
         // Update the display text/label if a title is provided
@@ -208,7 +208,7 @@ function addSegmentToUI(segmentData) {
 
     // Prevent duplicates in the UI list itself based on ID
     if (segmentElements.has(segmentData.id)) {
-        console.log(`[manifest_ui] Segment UI element already exists for ID: ${segmentData.id}`);
+        // console.log(`[manifest_ui] Segment UI element already exists for ID: ${segmentData.id}`);
         return;
     }
 
@@ -324,7 +324,7 @@ function addSegmentToUI(segmentData) {
         }
     } else {
         // Fallback: Append any other unknown types
-        console.log(`[manifest_ui] Unknown segment type "${segmentData.type}" for insertion, appending.`);
+        // console.log(`[manifest_ui] Unknown segment type "${segmentData.type}" for insertion, appending.`);
         uiElements.metadataList.appendChild(el);
     }
     // --- End Insertion Logic ---
@@ -332,7 +332,7 @@ function addSegmentToUI(segmentData) {
 
 
 function selectSegment(segment, segmentElement) {
-    console.log(`[manifest_ui] Selecting segment: ${segment.id} (URL: ${segment.url})`);
+    // console.log(`[manifest_ui] Selecting segment: ${segment.id} (URL: ${segment.url})`);
 
     // Remove 'selected' class from all other items
     document.querySelectorAll('#metadataList .segment-item.selected').forEach(el => el.classList.remove('selected'));
@@ -378,11 +378,11 @@ function fetchPlaylistContent(url, type) {
     let foundInState = false; // Flag to track if we found it in state
 
     if (parserState) {
-        console.log(`[manifest_ui] Checking parser state for ${type} playlist: ${url}`);
+        // console.log(`[manifest_ui] Checking parser state for ${type} playlist: ${url}`);
         if (type === 'master' && parserState.masterUrl === url) {
             content = parserState.masterManifest;
             if (content) {
-                console.log('[manifest_ui] Found master content in state.');
+                // console.log('[manifest_ui] Found master content in state.');
                 foundInState = true;
             }
         } else if (type === 'media') {
@@ -390,10 +390,10 @@ function fetchPlaylistContent(url, type) {
             const playlistInfo = Object.values(parserState.mediaPlaylists || {}).find(p => p.url === url);
             if (playlistInfo && playlistInfo.content) {
                 content = playlistInfo.content;
-                console.log(`[manifest_ui] Found media content in state for URL: ${url}`);
+                // console.log(`[manifest_ui] Found media content in state for URL: ${url}`);
                 foundInState = true;
             } else {
-                console.log(`[manifest_ui] Media playlist content not found in state for URL: ${url}. Known media playlist URLs:`, Object.values(parserState.mediaPlaylists || {}).map(p => p.url));
+                // console.log(`[manifest_ui] Media playlist content not found in state for URL: ${url}. Known media playlist URLs:`, Object.values(parserState.mediaPlaylists || {}).map(p => p.url));
             }
         }
     } else {
@@ -402,7 +402,7 @@ function fetchPlaylistContent(url, type) {
 
 
     if (foundInState && content) {
-        console.log(`[manifest_ui] Using cached ${type} playlist content.`);
+        // console.log(`[manifest_ui] Using cached ${type} playlist content.`);
         // Need to simulate headers slightly if using cached content
         const pseudoHeaders = [
             `Status: 200 OK (Cached)`,
@@ -414,7 +414,7 @@ function fetchPlaylistContent(url, type) {
         displayPlaylistDetails(url, content, type);
     } else {
         // Fallback to fetching from network if not found in state
-        console.log(`[manifest_ui] Fetching ${type} playlist content from network: ${url}`);
+        // console.log(`[manifest_ui] Fetching ${type} playlist content from network: ${url}`);
         fetch(url, { cache: 'no-store' }) // Ensure fresh fetch if not cached
             .then(res => {
                 // Display actual headers from network response
@@ -538,7 +538,7 @@ function updateBodyContent(content) {
 
 function handleSegmentExpired(event) {
     const { id, url } = event.detail;
-    console.log(`[manifest_ui] Handling expiration/failure for ID: ${id}, URL: ${url}`);
+    // console.log(`[manifest_ui] Handling expiration/failure for ID: ${id}, URL: ${url}`);
     const element = id ? segmentElements.get(id) : document.querySelector(`div[data-segment-url="${url}"]`);
 
     if (element && !element.classList.contains('segment-expired')) {
@@ -692,8 +692,8 @@ function getRawSrcUrl() {
         try {
             // Try decoding. If it fails or doesn't change, use the raw value.
             const decoded = decodeURIComponent(match[1]);
-            console.log('[manifest_ui] Raw "src" param:', match[1]);
-            console.log('[manifest_ui] Decoded "src" param:', decoded);
+            // console.log('[manifest_ui] Raw "src" param:', match[1]);
+            // console.log('[manifest_ui] Decoded "src" param:', decoded);
             // Heuristic: If decoding significantly changed it AND it looks like a URL, use decoded.
             if (decoded !== match[1] && (decoded.startsWith('http') || decoded.startsWith('blob'))) {
                 // It seems like it was genuinely encoded, use the decoded version
@@ -707,7 +707,7 @@ function getRawSrcUrl() {
         }
 
     }
-    console.log('[manifest_ui] "src" parameter not found in query string.');
+    // console.log('[manifest_ui] "src" parameter not found in query string.');
     return null;
 }
 

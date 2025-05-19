@@ -33,12 +33,15 @@
             }
         },
 
-        // Timer configuration (default 2 minutes)
+        // Timer configuration with updated constraints
         timer: {
-            defaultMinutes: 0,     // Changed from 2 minutes to 0 minutes
-            defaultSeconds: 15,    // Changed from 0 seconds to 15 seconds
-            minTime: 5,            // minimum 5 seconds
-            maxTime: 600           // maximum 10 minutes
+            defaultMinutes: 0,
+            defaultSeconds: 15,
+            minTime: 15,            // Minimum 15 seconds
+            maxTime: 3600,          // Maximum 1 hour (3600 seconds)
+            intervalCheckTime: 600, // 10 minutes in seconds
+            intervalFrequency: 900, // 15 minutes in seconds for longer durations
+            maxIntervals: 4         // Maximum number of interval checks
         }
     };
 
@@ -57,7 +60,13 @@
         },
         selectedTasks: [],
         analysisStartTime: null,
-        resultsData: null
+        resultsData: null,
+        // New state for interval checks
+        intervalData: {
+            nextCheckTime: 0,
+            checkPoints: [],
+            snapshots: []
+        }
     };
 
     // ==============================
@@ -122,12 +131,13 @@
                 state.timer.minutes += Math.floor(state.timer.seconds / 60);
                 state.timer.seconds %= 60;
             }
+        } else if (state.timer.totalSeconds() < 600) { // Less than 10 minutes
+            state.timer.minutes += 1; // Add 1 minute at a time
         } else {
-            // Add full minutes when the time is already substantial
-            state.timer.minutes += 1;
+            state.timer.minutes += 5; // Add 5 minutes at a time for larger values
         }
 
-        // Enforce maximum
+        // Enforce maximum (3600 seconds = 1 hour)
         const totalSeconds = state.timer.totalSeconds();
         if (totalSeconds > config.timer.maxTime) {
             state.timer.minutes = Math.floor(config.timer.maxTime / 60);
@@ -148,16 +158,24 @@
                 state.timer.minutes -= 1;
                 state.timer.seconds = 55; // 60 - 5
             }
-        } else {
-            // For larger values, decrement in minutes
+        } else if (state.timer.totalSeconds() <= 600) { // 10 minutes or less
             if (state.timer.seconds > 0) {
                 state.timer.seconds = 0;
             } else {
                 state.timer.minutes -= 1;
             }
+        } else {
+            // For larger values, decrement in 5-minute steps
+            if (state.timer.seconds > 0) {
+                state.timer.seconds = 0;
+            } else if (state.timer.minutes >= 5) {
+                state.timer.minutes -= 5;
+            } else {
+                state.timer.minutes = 0;
+            }
         }
 
-        // Enforce minimum
+        // Enforce minimum (15 seconds)
         const totalSeconds = state.timer.totalSeconds();
         if (totalSeconds < config.timer.minTime) {
             state.timer.minutes = Math.floor(config.timer.minTime / 60);
@@ -173,14 +191,76 @@
         }
     }
 
+    function setupIntervalChecks() {
+        // Reset interval data
+        state.intervalData.checkPoints = [];
+        state.intervalData.snapshots = [];
+        state.intervalData.nextCheckTime = 0;
+
+        const totalDuration = state.timer.totalSeconds();
+
+        // If duration is less than the interval check time, no intervals needed
+        if (totalDuration <= config.timer.intervalCheckTime) {
+            return false;
+        }
+
+        // Take initial snapshot immediately
+        const initialSnapshot = collectDataForAnalysis();
+        state.intervalData.snapshots.push(initialSnapshot);
+        state.intervalData.checkPoints.push(0); // 0 seconds from start
+
+        // For durations over 10 minutes (600 seconds)
+        if (totalDuration > config.timer.intervalCheckTime) {
+            const numIntervals = Math.min(
+                Math.floor(totalDuration / config.timer.intervalFrequency),
+                config.timer.maxIntervals - 1 // -1 because we've already added the initial check
+            );
+
+            // Calculate check points (evenly distributed)
+            for (let i = 1; i <= numIntervals; i++) {
+                const checkPoint = Math.min(
+                    Math.round(i * (totalDuration / (numIntervals + 1))), // +1 to include final check
+                    totalDuration - 5 // Ensure at least 5 seconds before end
+                );
+                state.intervalData.checkPoints.push(checkPoint);
+            }
+
+            // Set next check time
+            state.intervalData.nextCheckTime = state.intervalData.checkPoints[0];
+            return true;
+        }
+
+        return false;
+    }
+
     function startTimerCountdown() {
         if (state.timer.intervalId) {
             clearInterval(state.timer.intervalId);
         }
 
         let totalSeconds = state.timer.totalSeconds();
+        const hasIntervals = setupIntervalChecks();
+        let intervalIndex = 0;
+
         state.timer.intervalId = setInterval(() => {
             totalSeconds--;
+
+            // Check if it's time for an interval data collection
+            if (hasIntervals &&
+                intervalIndex < state.intervalData.checkPoints.length &&
+                totalSeconds === totalDuration - state.intervalData.checkPoints[intervalIndex]) {
+
+                // Take a snapshot at this interval
+                const intervalSnapshot = collectDataForAnalysis();
+                state.intervalData.snapshots.push(intervalSnapshot);
+
+                // Log the interval check for debugging
+                console.log(`[agent_manager] Interval check ${intervalIndex + 1} at ${state.intervalData.checkPoints[intervalIndex]} seconds from start`);
+
+                // Move to next interval
+                intervalIndex++;
+            }
+
             if (totalSeconds <= 0) {
                 clearInterval(state.timer.intervalId);
                 state.timer.intervalId = null;
@@ -231,7 +311,17 @@
     }
 
     function finishAnalysis() {
-        const collectedData = collectDataForAnalysis();
+        const finalSnapshot = collectDataForAnalysis();
+
+        // If using interval data, add the final snapshot
+        if (state.intervalData.snapshots.length > 0) {
+            state.intervalData.snapshots.push(finalSnapshot);
+            state.intervalData.checkPoints.push(state.timer.totalSeconds());
+        }
+
+        const collectedData = state.intervalData.snapshots.length > 1
+            ? processIntervalData(state.intervalData.snapshots)
+            : finalSnapshot;
 
         if (Object.keys(collectedData).length === 0) {
             stopAnalysis();
@@ -239,7 +329,7 @@
             return;
         }
 
-        // Future enhancement: For now perform local analysis without LLM
+        // Perform local analysis with interval data if available
         const analysisResults = performLocalAnalysis(collectedData);
         displayAnalysisResults(analysisResults);
 
@@ -262,6 +352,179 @@
             });
 
         stopAnalysis();
+    }
+
+    function processIntervalData(snapshots) {
+        // Create a combined data object that includes the interval snapshots
+        const processedData = {
+            ...snapshots[snapshots.length - 1], // Use latest snapshot as base
+            intervals: {
+                count: snapshots.length,
+                checkPoints: state.intervalData.checkPoints,
+                snapshots: snapshots
+            },
+            trends: {}
+        };
+
+        // Calculate trends for key metrics between snapshots
+        if (snapshots.length >= 2) {
+            // For each task type, calculate relevant trends
+            if (state.selectedTasks.includes('analyzePlaybackErrors')) {
+                processedData.trends.playbackErrors = analyzePlaybackErrorTrends(snapshots);
+            }
+
+            if (state.selectedTasks.includes('assessAbrPerformance')) {
+                processedData.trends.abrPerformance = analyzeAbrPerformanceTrends(snapshots);
+            }
+
+            if (state.selectedTasks.includes('evaluateCacheEffectiveness')) {
+                processedData.trends.cacheEffectiveness = analyzeCacheTrends(snapshots);
+            }
+        }
+
+        return processedData;
+    }
+
+    function analyzePlaybackErrorTrends(snapshots) {
+        const trends = {
+            rebufferingEvents: [],
+            rebufferingDurations: [],
+            startTime: snapshots[0].analysisTime,
+            endTime: snapshots[snapshots.length - 1].analysisTime,
+            stability: "stable"
+        };
+
+        // Extract rebuffering events and durations from each snapshot
+        snapshots.forEach((snapshot, index) => {
+            if (snapshot.metrics) {
+                trends.rebufferingEvents.push(snapshot.metrics.rebufferingEvents || 0);
+
+                // Calculate average rebuffer duration for this snapshot
+                const rebufferDurations = snapshot.metrics.rebufferingDurations || [];
+                const avgDuration = rebufferDurations.length > 0
+                    ? rebufferDurations.reduce((sum, dur) => sum + dur, 0) / rebufferDurations.length
+                    : 0;
+                trends.rebufferingDurations.push(avgDuration);
+            }
+        });
+
+        // Analyze trends in rebuffering
+        if (trends.rebufferingEvents.length >= 2) {
+            const firstCount = trends.rebufferingEvents[0];
+            const lastCount = trends.rebufferingEvents[trends.rebufferingEvents.length - 1];
+            const rebufferRate = lastCount - firstCount;
+
+            if (rebufferRate > 5) {
+                trends.stability = "deteriorating";
+            } else if (rebufferRate > 2) {
+                trends.stability = "concerning";
+            } else if (rebufferRate > 0) {
+                trends.stability = "acceptable";
+            } else {
+                trends.stability = "stable";
+            }
+        }
+
+        return trends;
+    }
+
+    function analyzeAbrPerformanceTrends(snapshots) {
+        const trends = {
+            qualitySwitches: [],
+            bitrates: [],
+            startTime: snapshots[0].analysisTime,
+            endTime: snapshots[snapshots.length - 1].analysisTime,
+            stability: "stable"
+        };
+
+        // Extract quality switches and bitrates from each snapshot
+        snapshots.forEach((snapshot) => {
+            if (snapshot.metrics) {
+                trends.qualitySwitches.push(snapshot.metrics.qualitySwitches || 0);
+                trends.bitrates.push(snapshot.metrics.currentBitrate || 0);
+            }
+        });
+
+        // Analyze trends in quality switches
+        if (trends.qualitySwitches.length >= 2) {
+            const firstCount = trends.qualitySwitches[0];
+            const lastCount = trends.qualitySwitches[trends.qualitySwitches.length - 1];
+            const switchRate = lastCount - firstCount;
+
+            if (switchRate > 10) {
+                trends.stability = "unstable";
+            } else if (switchRate > 5) {
+                trends.stability = "fluctuating";
+            } else if (switchRate > 2) {
+                trends.stability = "adjusting";
+            } else {
+                trends.stability = "stable";
+            }
+        }
+
+        // Analyze bitrate consistency if we have multiple samples
+        if (trends.bitrates.length >= 3) {
+            const nonZeroBitrates = trends.bitrates.filter(br => br > 0);
+            if (nonZeroBitrates.length >= 2) {
+                const maxBitrate = Math.max(...nonZeroBitrates);
+                const minBitrate = Math.min(...nonZeroBitrates);
+
+                // Calculate bitrate variation as a percentage of the max
+                const variation = maxBitrate > 0 ? (maxBitrate - minBitrate) / maxBitrate : 0;
+
+                if (variation > 0.5) {
+                    trends.bitrateConsistency = "highly variable";
+                } else if (variation > 0.2) {
+                    trends.bitrateConsistency = "variable";
+                } else {
+                    trends.bitrateConsistency = "consistent";
+                }
+            }
+        }
+
+        return trends;
+    }
+
+    function analyzeCacheTrends(snapshots) {
+        const trends = {
+            hitRatios: [],
+            hitCounts: [],
+            missCounts: [],
+            startTime: snapshots[0].analysisTime,
+            endTime: snapshots[snapshots.length - 1].analysisTime,
+            trend: "stable"
+        };
+
+        // Extract cache data from each snapshot
+        snapshots.forEach((snapshot) => {
+            if (snapshot.cache) {
+                const hitRatio = snapshot.cache.total > 0 ? snapshot.cache.hits / snapshot.cache.total : 0;
+                trends.hitRatios.push(hitRatio);
+                trends.hitCounts.push(snapshot.cache.hits || 0);
+                trends.missCounts.push(snapshot.cache.misses || 0);
+            }
+        });
+
+        // Analyze trends in cache hit ratio
+        if (trends.hitRatios.length >= 2) {
+            const firstRatio = trends.hitRatios[0];
+            const lastRatio = trends.hitRatios[trends.hitRatios.length - 1];
+            const ratioDifference = lastRatio - firstRatio;
+
+            if (ratioDifference > 0.2) {
+                trends.trend = "improving";
+            } else if (ratioDifference > 0.05) {
+                trends.trend = "slightly improving";
+            } else if (ratioDifference < -0.2) {
+                trends.trend = "deteriorating";
+            } else if (ratioDifference < -0.05) {
+                trends.trend = "slightly deteriorating";
+            } else {
+                trends.trend = "stable";
+            }
+        }
+
+        return trends;
     }
 
     function stopAnalysis() {
@@ -383,6 +646,46 @@
             results.tasks.cacheEffectiveness = analyzeCacheEffectiveness(data);
         }
 
+        // Add interval analysis into the summary if available
+        if (data.intervals && data.intervals.count > 1) {
+            results.summary = `Analysis Complete over ${data.intervals.count} check points across ${Math.round(data.analysisTime)} seconds.`;
+
+            // Update task results with trend information
+            if (data.trends) {
+                Object.keys(data.trends).forEach(taskType => {
+                    if (results.tasks[taskType]) {
+                        results.tasks[taskType].trends = data.trends[taskType];
+
+                        // Update details and status based on trends
+                        if (taskType === 'playbackErrors' && data.trends.playbackErrors) {
+                            const stability = data.trends.playbackErrors.stability;
+                            if (stability === 'deteriorating') {
+                                results.tasks[taskType].status = 'Unstable';
+                                results.tasks[taskType].details += ` Analysis shows a deteriorating trend over time.`;
+                            }
+                        }
+
+                        if (taskType === 'abrPerformance' && data.trends.abrPerformance) {
+                            const stability = data.trends.abrPerformance.stability;
+                            if (stability === 'unstable' || stability === 'fluctuating') {
+                                results.tasks[taskType].status = 'Unstable';
+                                results.tasks[taskType].details += ` ABR switching pattern shows ${stability} behavior over time.`;
+                            }
+                        }
+
+                        if (taskType === 'cacheEffectiveness' && data.trends.cacheEffectiveness) {
+                            const trend = data.trends.cacheEffectiveness.trend;
+                            if (trend === 'improving') {
+                                results.tasks[taskType].details += ` Cache performance is improving over time.`;
+                            } else if (trend === 'deteriorating') {
+                                results.tasks[taskType].details += ` Cache performance is deteriorating over time.`;
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
         return results;
     }
 
@@ -404,6 +707,16 @@
             if (rebufferEvents > 0) {
                 result.status = rebufferEvents > 3 ? "Unstable" : "Warning";
                 result.details = `Detected ${rebufferEvents} buffering events with average duration of ${avgRebufferDuration.toFixed(2)}s.`;
+            }
+        }
+
+        // If we have interval data and trends
+        if (data.trends && data.trends.playbackErrors) {
+            const trends = data.trends.playbackErrors;
+
+            if (trends.stability === "deteriorating") {
+                result.status = "Unstable";
+                result.details = `Playback stability deteriorating over time. Started with ${trends.rebufferingEvents[0]} buffering events, ended with ${trends.rebufferingEvents[trends.rebufferingEvents.length - 1]}.`;
             }
         }
 
@@ -454,6 +767,21 @@
             }
         }
 
+        // If we have interval data and trends
+        if (data.trends && data.trends.abrPerformance) {
+            const trends = data.trends.abrPerformance;
+
+            if (trends.stability === "unstable") {
+                result.status = "Unstable";
+                result.details = `ABR switching pattern is unstable over time. Started with ${trends.qualitySwitches[0]} switches, ended with ${trends.qualitySwitches[trends.qualitySwitches.length - 1]}.`;
+            }
+
+            if (trends.bitrateConsistency === "highly variable") {
+                if (result.status === "Good") result.status = "Fair";
+                result.details += ` Bitrate varies significantly over time.`;
+            }
+        }
+
         return result;
     }
 
@@ -481,6 +809,26 @@
             } else {
                 result.status = "Poor";
                 result.details = `Cache hit ratio is only ${(hitRatio * 100).toFixed(1)}%. CDN caching appears ineffective.`;
+            }
+        }
+
+        // If we have interval data and trends
+        if (data.trends && data.trends.cacheEffectiveness) {
+            const trends = data.trends.cacheEffectiveness;
+
+            // Enhance details with trend information
+            if (trends.trend === "improving") {
+                result.details += ` Cache performance is improving over time (${(trends.hitRatios[0] * 100).toFixed(1)}% → ${(trends.hitRatios[trends.hitRatios.length - 1] * 100).toFixed(1)}%).`;
+                // Upgrade status if significant improvement
+                if (result.status === "Fair" && trends.hitRatios[trends.hitRatios.length - 1] >= 0.45) {
+                    result.status = "Good";
+                }
+            } else if (trends.trend === "deteriorating") {
+                result.details += ` Cache performance is deteriorating over time (${(trends.hitRatios[0] * 100).toFixed(1)}% → ${(trends.hitRatios[trends.hitRatios.length - 1] * 100).toFixed(1)}%).`;
+                // Downgrade status if significant deterioration
+                if (result.status === "Good" && trends.hitRatios[trends.hitRatios.length - 1] <= 0.55) {
+                    result.status = "Fair";
+                }
             }
         }
 
@@ -566,8 +914,41 @@
             }
         }
 
+        // Enhance prompt with interval data if available
+        let intervalContext = '';
+        if (trimmedData.intervals && trimmedData.intervals.count > 1) {
+            intervalContext = `
+This analysis includes data collected at ${trimmedData.intervals.count} checkpoints over ${trimmedData.analysisTime.toFixed(1)} seconds, allowing for time-based trend analysis. The data shows how metrics evolved during the session.`;
+
+            // Include key trend information if available
+            if (trimmedData.trends) {
+                intervalContext += `
+
+Key trends observed:`;
+
+                if (trimmedData.trends.playbackErrors) {
+                    intervalContext += `
+- Playback stability: ${trimmedData.trends.playbackErrors.stability}`;
+                }
+
+                if (trimmedData.trends.abrPerformance) {
+                    intervalContext += `
+- ABR switching pattern: ${trimmedData.trends.abrPerformance.stability}`;
+                    if (trimmedData.trends.abrPerformance.bitrateConsistency) {
+                        intervalContext += `
+- Bitrate consistency: ${trimmedData.trends.abrPerformance.bitrateConsistency}`;
+                    }
+                }
+
+                if (trimmedData.trends.cacheEffectiveness) {
+                    intervalContext += `
+- Cache hit ratio trend: ${trimmedData.trends.cacheEffectiveness.trend}`;
+                }
+            }
+        }
+
         // Create context section with reduced data
-        let prompt = `As an expert HLS streaming engineer, analyze the following stream telemetry data collected over ${data.analysisTime.toFixed(1)} seconds:
+        let prompt = `As an expert HLS streaming engineer, analyze the following stream telemetry data collected over ${data.analysisTime.toFixed(1)} seconds:${intervalContext}
 
 \`\`\`json
 ${JSON.stringify(trimmedData, null, 2)}
@@ -885,14 +1266,38 @@ Your analysis must be firmly grounded in the provided data. Status values must b
                             <h4 style="margin: 0; color: #ffffff; font-size: 13px; flex-grow: 1;">${taskName}</h4>
                             <span style="background-color: ${statusColor}; border-radius: 3px; color: ${badgeTextColor}; font-size: 8px; padding: 1px 5px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap;">${taskResult.status || 'N/A'}</span>
                         </div>
-                        <div style="margin: 0 0 1px 0; line-height: 1.3; font-size: 11px; word-break: break-word;">${cleanAndFormatText(taskResult.details)}</div>
+                        <div style="margin: 0 0 1px 0; line-height: 1.3; font-size: 12px; word-break: break-word;">${cleanAndFormatText(taskResult.details)}</div>
                 `;
+
+                // Add trend information if available
+                if (taskResult.trends) {
+                    html += `
+                        <div style="margin-top: 2px; background-color: rgba(0,0,0,0.2); padding: 3px 5px; border-radius: 3px;">
+                            <h5 style="margin: 0 0 1px 0; color: #d0d0d0; font-size: 10px; font-weight: bold;">Trend:</h5>
+                            <div style="margin: 0; line-height: 1.3; font-size: 10px; color: #b0b0b0; word-break: break-word;">`;
+
+                    if (taskId === 'playbackErrors' && taskResult.trends.stability) {
+                        html += `Playback stability trend: ${taskResult.trends.stability}`;
+                    } else if (taskId === 'abrPerformance') {
+                        if (taskResult.trends.stability) {
+                            html += `ABR switching pattern: ${taskResult.trends.stability}`;
+                        }
+                        if (taskResult.trends.bitrateConsistency) {
+                            html += `<br>Bitrate consistency: ${taskResult.trends.bitrateConsistency}`;
+                        }
+                    } else if (taskId === 'cacheEffectiveness' && taskResult.trends.trend) {
+                        html += `Cache hit ratio trend: ${taskResult.trends.trend}`;
+                    }
+
+                    html += `</div>
+                        </div>`;
+                }
 
                 if (taskResult.recommendation) {
                     html += `
                         <div style="margin-top: 0px;">
-                            <h5 style="margin: 0 0 1px 0; color: #d0d0d0; font-size: 11px; font-weight: bold;">Recommendation:</h5>
-                            <div style="margin: 0; line-height: 1.3; font-size: 11px; color: #b0b0b0; word-break: break-word;">${cleanAndFormatText(taskResult.recommendation)}</div>
+                            <h5 style="margin: 0 0 1px 0; color: #d0d0d0; font-size: 12px; font-weight: bold;">Recommendation:</h5>
+                            <div style="margin: 0; line-height: 1.3; font-size: 12px; color: #b0b0b0; word-break: break-word;">${cleanAndFormatText(taskResult.recommendation)}</div>
                         </div>
                     `;
                 }

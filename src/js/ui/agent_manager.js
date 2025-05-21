@@ -18,7 +18,7 @@
             endpoints: {
                 anthropic: 'https://api.anthropic.com/v1/messages',
                 openai: 'https://api.openai.com/v1/chat/completions',
-                gemini: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent',
+                gemini: 'https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent',
                 mistral: 'https://api.mistral.ai/v1/chat/completions'
             },
             models: {
@@ -1100,7 +1100,28 @@ Your analysis must be firmly grounded in the provided data. Status values must b
     }
 
     async function callGeminiApi(apiKey, prompt) {
-        const endpoint = `${config.llm.endpoints.gemini}?key=${apiKey}`;
+        // Get the configured Gemini model name
+        const modelName = config.llm.models.gemini;
+        if (!modelName) {
+            // This should ideally not happen if config is set, but good for robustness
+            console.error("[agent_manager] Gemini model name not configured in config.llm.models.gemini");
+            throw new Error("Gemini model name not configured.");
+        }
+
+        // Get the endpoint URL template
+        const endpointUrlTemplate = config.llm.endpoints.gemini;
+        if (!endpointUrlTemplate || !endpointUrlTemplate.includes('{MODEL}')) {
+            console.error("[agent_manager] Gemini endpoint template is missing or malformed in config.llm.endpoints.gemini");
+            throw new Error("Gemini endpoint template is misconfigured.");
+        }
+
+        // Replace the {MODEL} placeholder with the actual model name
+        const populatedEndpointUrl = endpointUrlTemplate.replace('{MODEL}', modelName);
+
+        const endpoint = `${populatedEndpointUrl}?key=${apiKey}`;
+
+        console.log(`[agent_manager] Calling Gemini API. Endpoint: ${populatedEndpointUrl}, Model: ${modelName}`); // For debugging
+
         const requestBody = {
             contents: [{
                 parts: [{ text: prompt }]
@@ -1109,14 +1130,14 @@ Your analysis must be firmly grounded in the provided data. Status values must b
                 temperature: 0.2,
                 topK: 40,
                 topP: 0.95,
-                maxOutputTokens: 2048,
-                safetySettings: [
-                    { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
-                    { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
-                    { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
-                    { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
-                ]
-            }
+                maxOutputTokens: 2048
+            },
+            safetySettings: [
+                { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+                { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+                { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+                { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+            ]
         };
 
         try {
@@ -1149,12 +1170,16 @@ Your analysis must be firmly grounded in the provided data. Status values must b
 
             const data = await response.json();
 
-            // Check for content filter reasons first (if safetySettings are strict)
-            if (data.candidates && data.candidates[0] && data.candidates[0].finishReason === "SAFETY") {
-                console.warn('[agent_manager] Gemini API response blocked due to safety settings. Candidate:', data.candidates[0]);
-                throw new Error("Gemini API Error: Response blocked due to safety concerns. The prompt or response might have violated content policies.");
+            // Check for content filter reasons first
+            if (data.candidates && data.candidates.length > 0 && data.candidates[0].finishReason === "SAFETY") {
+                let safetyDetails = "No specific safety ratings provided.";
+                if (data.candidates[0].safetyRatings && data.candidates[0].safetyRatings.length > 0) {
+                     safetyDetails = data.candidates[0].safetyRatings.map(r => `${r.category}: ${r.probability}`).join(', ');
+                }
+                console.warn(`[agent_manager] Gemini API response blocked due to safety settings. Details: ${safetyDetails}. Candidate:`, data.candidates[0]);
+                throw new Error(`Gemini API Error: Response blocked due to safety concerns (${safetyDetails}). The prompt or response might have violated content policies.`);
             }
-            if (data.candidates && data.candidates[0] && data.candidates[0].finishReason === "MAX_TOKENS") {
+            if (data.candidates && data.candidates.length > 0 && data.candidates[0].finishReason === "MAX_TOKENS") {
                 console.warn('[agent_manager] Gemini API response truncated due to max_tokens. Candidate:', data.candidates[0]);
                 // Proceed with potentially truncated content, or throw an error if full response is critical
             }
@@ -1164,6 +1189,10 @@ Your analysis must be firmly grounded in the provided data. Status values must b
 
             if (!content) {
                 console.error('[agent_manager] Gemini API Error: No content found in a successful response. Full data:', data);
+                // Check if there was a promptFeedback blockReason
+                if (data.promptFeedback && data.promptFeedback.blockReason) {
+                     throw new Error(`Gemini API Error: Prompt blocked due to ${data.promptFeedback.blockReason}.`);
+                }
                 throw new Error("Gemini API Error: Empty or malformed content in response.");
             }
 

@@ -5,7 +5,7 @@
  */
 
 
-const { buildBadge, classifySegment, listenForExpirationEvents } = require('../src/js/ui/segment_tags');
+const { buildBadge, classifySegment, listenForExpirationEvents } = require('../../src/js/ui/segment_tags');
 
 describe('buildBadge', () => {
     test('returns null for null, undefined, or empty label', () => {

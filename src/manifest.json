@@ -8,13 +8,20 @@
         "48": "images/icon48.png",
         "128": "images/icon128.png"
     },
+    "externally_connectable": {
+        "matches": [
+            "http://localhost/*",
+            "http://127.0.0.1/*"
+        ]
+    },
     "permissions": [
         "tabs",
         "scripting",
         "declarativeNetRequest",
         "declarativeNetRequestFeedback",
         "storage",
-        "webNavigation"
+        "webNavigation",
+        "activeTab"
     ],
     "host_permissions": [
         "<all_urls>"

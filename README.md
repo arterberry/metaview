@@ -83,62 +83,7 @@ window.metaviewAPI.metrics.getCurrentAudioTrack()
 
 ## Cypress Test Example
 
-Add `cypress` to your project:
-
-```bash
-npm install --save-dev cypress
-```
-
-Create `cypress/integration/api_spec.js`:
-
-```js
-describe('MetaView API smoke test', () => {
-  before(() => {
-    cy.visit('http://localhost:3000/player.html?url=https://example.com/stream.m3u8');
-    // TODO: serve dist/ via local HTTP server
-  });
-
-  it('should expose QoE and parser APIs', () => {
-    cy.window().then(win => {
-      expect(win.metaviewAPI).to.exist;
-      expect(typeof win.metaviewAPI.metrics.getCurrentBitrate).to.equal('function');
-      const bitrate = win.metaviewAPI.metrics.getCurrentBitrate();
-      expect(bitrate).to.be.a('number');
-    });
-  });
-});
-```
-
-### Running locally
-
-```bash
-npx cypress open
-```
-
-### GitHub Actions
-
-```yaml
-# .github/workflows/cypress.yml
-name: Cypress Tests
-on: [push, pull_request]
-jobs:
-  e2e:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - name: Install dependencies
-        run: npm ci
-      - name: Start server
-        run: npm run serve &
-      - name: Run Cypress tests
-        uses: cypress-io/github-action@v4
-        with:
-          start: npm run serve
-          wait-on: 'http://localhost:3000'
-          command: npm run cy:run
-```
-
-> If CI cannot launch Chrome (e.g. in headless environments), configure `cypress.json` to use the Electron browser.
+Please review the requirements and comprehensive details located here: [Cypress E2E Test for MetaView Player API](https://github.com/fox-digital/metaviewplayer/tree/main/tests/cypress) 
 
 ## License
 

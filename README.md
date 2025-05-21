@@ -92,7 +92,7 @@ window.metaviewAPI.metrics.getCurrentAudioTrack()
 
 ## Cypress Test Example
 
-Please review the requirements and comprehensive details located here: [Cypress E2E Test for MetaView Player API](https://github.com/fox-digital/metaviewplayer/tree/main/tests/cypress) 
+Please review the requirements and comprehensive details located here: [Cypress E2E Test for MetaView Player API](https://github.com/fox-digitalvideo/metaviewplayer/tree/main/tests/cypress) 
 
 ## License
 
